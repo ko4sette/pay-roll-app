@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Cafe Payroll",
+    "slug": "cafe-payroll",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#FAF7F2"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      "expo-status-bar"
+    ]
+  }
+}
