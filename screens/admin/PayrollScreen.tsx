@@ -1,5 +1,6 @@
 import React from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
+import { AppText as Text } from "../../components/common/AppText";
 import { Employee, Attendance, PayrollRecord } from "../../types";
 import { ScreenContainer } from "../../components/common/ScreenContainer";
 import { AppCard } from "../../components/common/AppCard";
@@ -8,10 +9,11 @@ import { StatusBadge } from "../../components/common/StatusBadge";
 import { COLORS } from "../../constants/colors";
 import { peso } from "../../utils/currencyUtils";
 import { calculatePay } from "../../utils/payrollCalculator";
+import { localDateString } from "../../utils/dateUtils";
 
 export function PayrollScreen({ employees, attendance, payroll, setPayroll }: { employees: Employee[]; attendance: Attendance[]; payroll: PayrollRecord[]; setPayroll: React.Dispatch<React.SetStateAction<PayrollRecord[]>> }) {
-  const periodStart = new Date().toISOString().slice(0, 8) + "01";
-  const periodEnd = new Date().toISOString().slice(0, 10);
+  const periodEnd = localDateString();
+  const periodStart = `${periodEnd.slice(0, 7)}-01`;
   const generate = () => {
     const active = employees.filter(e => e.employmentStatus === "Active");
     const newRecords: PayrollRecord[] = active.filter(e => !payroll.some(p => p.employeeId === e.id && p.periodStart === periodStart && p.periodEnd === periodEnd)).map(e => {
@@ -22,7 +24,7 @@ export function PayrollScreen({ employees, attendance, payroll, setPayroll }: { 
     setPayroll(old => [...old, ...newRecords]);
     Alert.alert("Payroll generated", `${newRecords.length} draft payroll records added. Review them before marking as paid.`);
   };
-  const markPaid = (record: PayrollRecord) => Alert.alert("Confirm payment", "Mark this payroll record as paid?", [{ text: "Cancel" }, { text: "Mark paid", onPress: () => setPayroll(old => old.map(p => p.id === record.id ? { ...p, status: "Paid", paidAt: new Date().toISOString().slice(0, 10) } : p)) }]);
+  const markPaid = (record: PayrollRecord) => Alert.alert("Confirm payment", "Mark this payroll record as paid?", [{ text: "Cancel" }, { text: "Mark paid", onPress: () => setPayroll(old => old.map(p => p.id === record.id ? { ...p, status: "Paid", paidAt: localDateString() } : p)) }]);
   return <ScreenContainer title="Payroll" subtitle="Generate and review employee payroll.">
     <AppCard><Text style={styles.heading}>Current demo period</Text><Text style={styles.meta}>{periodStart} to {periodEnd}</Text><Text style={styles.note}>Demo calculation: hourly rate × approved hours. A sample 5% deduction is used for demonstration only.</Text><AppButton title="Generate payroll for active staff" onPress={generate} /></AppCard>
     {payroll.slice().reverse().map(p => {

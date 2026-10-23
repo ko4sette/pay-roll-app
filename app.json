@@ -4,6 +4,7 @@
     "slug": "cafe-payroll",
     "version": "1.0.0",
     "orientation": "portrait",
+    "scheme": "cafe-payroll",
     "userInterfaceStyle": "light",
     "splash": {
       "backgroundColor": "#FAF7F2"
@@ -12,7 +13,8 @@
       "**/*"
     ],
     "plugins": [
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-router"
     ]
   }
 }

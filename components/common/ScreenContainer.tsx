@@ -1,5 +1,6 @@
 import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
+import { AppText as Text } from "./AppText";
 import { COLORS } from "../../constants/colors";
 
 export function ScreenContainer({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {

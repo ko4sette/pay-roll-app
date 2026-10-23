@@ -1,5 +1,6 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { AppText as Text } from "./AppText";
 import { COLORS } from "../../constants/colors";
 export function StatusBadge({ status }: { status: string }) {
   const color = status === "Paid" || status === "Present" || status === "Active" ? COLORS.success : status === "Late" || status === "Pending" || status === "Incomplete" ? COLORS.warning : COLORS.error;

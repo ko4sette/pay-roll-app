@@ -1,5 +1,6 @@
 import React from "react";
-import { Text, View, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { AppText as Text } from "../../components/common/AppText";
 import { User, PayrollRecord } from "../../types";
 import { ScreenContainer } from "../../components/common/ScreenContainer";
 import { AppCard } from "../../components/common/AppCard";
