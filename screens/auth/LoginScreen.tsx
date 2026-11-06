@@ -118,9 +118,9 @@ export function LoginScreen({ employees, onLogin }: LoginScreenProps) {
             {passwordChangeUser
               ? "Change your temporary password to continue to your employee dashboard."
               : role === "admin"
-                ? "Sign in with your administrator credentials."
+                ? "Sign in with the administrator account."
                 : role === "staff"
-                  ? "Use the Employee ID and password provided by your admin."
+                  ? "Use the Employee ID and password provided to log in"
                   : "Choose Admin or Employee to continue."}
           </Text>
 
@@ -204,8 +204,8 @@ export function LoginScreen({ employees, onLogin }: LoginScreenProps) {
                     {showPassword ? "Hide password" : "Show password"}
                   </Text>
                   {role === "admin"
-                    ? <Text style={styles.hint}>Local demo account only; do not use for real accounts.</Text>
-                    : <Text style={styles.hint}>For a new account or password reset, use your Employee ID as the temporary password.</Text>}
+                    ? <Text style={styles.hint}></Text>
+                    : <Text style={styles.hint}></Text>}
                 </>
               ) : null}
               {errorMessage ? <Text accessibilityRole="alert" style={styles.error}>{errorMessage}</Text> : null}
