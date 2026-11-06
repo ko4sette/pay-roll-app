@@ -15,7 +15,11 @@ export function StaffDashboard({ user, attendance, payroll, onNavigate, onBrowse
   const today = localDateString();
   const todayRecord = attendance.find(a => a.employeeId === user.employeeId && a.workDate === today);
   return <ScreenContainer title={`Hello, ${user.name.split(" ")[0]}`} subtitle="Here's your work and pay summary.">
-    <AppCard style={styles.hero}><Text style={styles.small}>LATEST NET PAY</Text><Text style={styles.amount}>{latest ? peso(latest.netPay) : "Not available"}</Text><Text style={styles.small}>{latest ? `${latest.periodStart} – ${latest.periodEnd}` : "Your latest pay will appear here."}</Text></AppCard>
+    <AppCard style={styles.hero}>
+      <Text style={styles.small}>LATEST NET PAY</Text>
+      <Text style={styles.amount}>{latest ? peso(latest.netPay) : "Not available"}</Text>
+      <Text style={styles.small}>{latest ? `${latest.periodStart} – ${latest.periodEnd}` : "Your latest pay will appear here."}</Text>
+      </AppCard>
     <AppCard><Text style={styles.heading}>Today's attendance</Text><Text style={styles.body}>{todayRecord ? `${todayRecord.status} · Time in ${todayRecord.timeIn || "--"} · Time out ${todayRecord.timeOut || "--"}` : "No attendance recorded today."}<Text>{"\n"}Record your shift time from My Attendance.</Text></Text><AppButton title="Open My Attendance" onPress={() => onNavigate("Attendance")} /></AppCard>
     
   </ScreenContainer>;

@@ -9,7 +9,15 @@ import { localDateString } from "../../utils/dateUtils";
 import { Employee, Attendance, PayrollRecord } from "../../types";
 import { peso } from "../../utils/currencyUtils";
 
-export function AdminDashboard({ employees, attendance, payroll, onNavigate, onBrowseRecords }: { employees: Employee[]; attendance: Attendance[]; payroll: PayrollRecord[]; onNavigate: (tab: any) => void; onBrowseRecords: () => void }) {
+interface AdminDashboardProps {
+  employees: Employee[];
+  attendance: Attendance[];
+  payroll: PayrollRecord[];
+  onNavigate: (tab: any) => void;
+  onBrowseRecords: () => void;
+}
+
+export function AdminDashboard({ employees, attendance, payroll, onNavigate, onBrowseRecords }: AdminDashboardProps) {
   const today = localDateString();
   const present = attendance.filter(a => a.workDate === today && a.status === "Present").length;
   const pending = payroll.filter(p => p.status === "Pending").length;
@@ -20,4 +28,11 @@ export function AdminDashboard({ employees, attendance, payroll, onNavigate, onB
     <AppCard><Text style={styles.cardTitle}>Quick actions</Text><View style={styles.actions}><AppButton title="+ Add Employee" onPress={() => onNavigate("Employees")} /><AppButton title="View Attendance" secondary onPress={() => onNavigate("Attendance")} /><AppButton title="Process Payroll" secondary onPress={() => onNavigate("Payroll")} /><AppButton title="Browse Records" secondary onPress={onBrowseRecords} /></View></AppCard>
   </ScreenContainer>;
 }
-const styles = StyleSheet.create({ grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, stat: { width: "48%", flexGrow: 1, backgroundColor: COLORS.cream }, label: { color: COLORS.muted, fontSize: 12 }, value: { color: COLORS.darkBrown, fontSize: 21, fontWeight: "900", marginTop: 8 }, cardTitle: { color: COLORS.darkBrown, fontSize: 16, fontWeight: "800", marginBottom: 10 }, actions: { gap: 8 }, body: { color: COLORS.muted, lineHeight: 20 } });
+const styles = StyleSheet.create({
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  stat: { width: "48%", flexGrow: 1, backgroundColor: COLORS.cream },
+  label: { color: COLORS.muted, fontSize: 12 },
+  value: { color: COLORS.darkBrown, fontSize: 21, fontWeight: "900", marginTop: 8 },
+  cardTitle: { color: COLORS.darkBrown, fontSize: 16, fontWeight: "800", marginBottom: 10 },
+  actions: { gap: 8 },
+});

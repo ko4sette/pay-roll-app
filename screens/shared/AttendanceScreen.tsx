@@ -22,6 +22,8 @@ export function AttendanceScreen({ user, employees, attendance, setAttendance }:
     setAttendance(old => [...old, { id: `a${Date.now()}`, employeeId: user.employeeId || "", workDate: today, timeIn, regularHours: 0, overtimeHours: 0, status: "Incomplete" }]);
     Alert.alert("Time in recorded", `Time in: ${timeIn}`);
   };
+
+  
   const doTimeOut = () => {
     const current = attendance.find(a => a.employeeId === user.employeeId && a.workDate === today);
     if (!current?.timeIn) { Alert.alert("Time in required", "Record your time in before timing out."); return; }

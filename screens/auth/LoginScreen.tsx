@@ -1,27 +1,34 @@
 import React, { useState } from "react";
-import { ActivityIndicator, Alert, SafeAreaView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, SafeAreaView, StyleSheet, TouchableOpacity, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { AppButton } from "../../components/common/AppButton";
 import { Field } from "../../components/common/Field";
 import { COLORS } from "../../constants/colors";
 import { Employee, Role, User } from "../../types";
 import { authenticateDemoAdmin, authenticateEmployee, updateEmployeePassword } from "../../services/authService";
+import { ForgotPasswordScreen } from "./ForgotPasswordScreen";
 import { AppText as Text } from "../../components/common/AppText";
 import { BRAND_FONT } from "../../constants/typography";
 
 interface LoginScreenProps {
   employees: Employee[];
   onLogin: (user: User) => void | Promise<void>;
+  onPasswordAssistanceRequest: (employee: Employee) => Promise<{ ok: boolean; message: string }>;
 }
 
-export function LoginScreen({ employees, onLogin }: LoginScreenProps) {
+export function LoginScreen({ employees, onLogin, onPasswordAssistanceRequest }: LoginScreenProps) {
   const [role, setRole] = useState<Role | null>(null);
   const [employeeId, setEmployeeId] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordChangeUser, setPasswordChangeUser] = useState<User | null>(null);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [backHovered, setBackHovered] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -104,6 +111,14 @@ export function LoginScreen({ employees, onLogin }: LoginScreenProps) {
     }
   };
 
+  if (showForgotPassword) {
+    return <ForgotPasswordScreen
+      employees={employees}
+      onBack={() => setShowForgotPassword(false)}
+      onSubmit={onPasswordAssistanceRequest}
+    />;
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.page}>
@@ -113,7 +128,24 @@ export function LoginScreen({ employees, onLogin }: LoginScreenProps) {
         </View>
 
         <View style={styles.form}>
-          <Text style={styles.heading}>{passwordChangeUser ? "Change password" : "Sign in"}</Text>
+          {passwordChangeUser ? (
+            <View style={styles.headingRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Back to sign in"
+                onPress={() => setPasswordChangeUser(null)}
+                onHoverIn={() => setBackHovered(true)}
+                onHoverOut={() => setBackHovered(false)}
+                style={({ pressed }) => [
+                  styles.backButton,
+                  (backHovered || pressed) && styles.backButtonActive,
+                ]}
+              >
+                <MaterialCommunityIcons name="arrow-left" size={22} color={COLORS.darkBrown} />
+              </Pressable>
+              <Text style={styles.heading}>Change password</Text>
+            </View>
+          ) : <Text style={styles.heading}>Sign in</Text>}
           <Text style={styles.help}>
             {passwordChangeUser
               ? "Change your temporary password to continue to your employee dashboard."
@@ -133,27 +165,51 @@ export function LoginScreen({ employees, onLogin }: LoginScreenProps) {
                 label="CURRENT PASSWORD"
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
+                secureTextEntry={!showCurrentPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
                 placeholder="Enter your current password"
               />
+              <Text
+                accessibilityRole="button"
+                accessibilityState={{ selected: showCurrentPassword }}
+                onPress={() => setShowCurrentPassword(visible => !visible)}
+                style={styles.show}
+              >
+                {showCurrentPassword ? "Hide Password" : "Show Password"}
+              </Text>
               <Field
                 label="NEW PASSWORD"
                 value={newPassword}
                 onChangeText={setNewPassword}
-                secureTextEntry
+                secureTextEntry={!showNewPassword}
                 autoCapitalize="none"
                 placeholder="At least 8 characters"
               />
+              <Text
+                accessibilityRole="button"
+                accessibilityState={{ selected: showNewPassword }}
+                onPress={() => setShowNewPassword(visible => !visible)}
+                style={styles.show}
+              >
+                {showNewPassword ? "Hide Password" : "Show Password"}
+              </Text>
               <Field
                 label="CONFIRM NEW PASSWORD"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                secureTextEntry
+                secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
                 placeholder="Re-enter new password"
               />
+              <Text
+                accessibilityRole="button"
+                accessibilityState={{ selected: showConfirmPassword }}
+                onPress={() => setShowConfirmPassword(visible => !visible)}
+                style={styles.show}
+              >
+                {showConfirmPassword ? "Hide Password" : "Show Password"}
+              </Text>
               <AppButton title="Change password" onPress={submit} disabled={isSubmitting} />
               {errorMessage ? <Text accessibilityRole="alert" style={styles.error}>{errorMessage}</Text> : null}
               {isSubmitting ? <ActivityIndicator color={COLORS.brown} /> : null}
@@ -210,6 +266,13 @@ export function LoginScreen({ employees, onLogin }: LoginScreenProps) {
               ) : null}
               {errorMessage ? <Text accessibilityRole="alert" style={styles.error}>{errorMessage}</Text> : null}
               <AppButton title="Log In" onPress={submit} disabled={!role || isSubmitting} />
+              {role === "staff" && <Text
+                accessibilityRole="link"
+                onPress={() => setShowForgotPassword(true)}
+                style={styles.forgotPassword}
+              >
+                Forgot password?
+              </Text>}
               {isSubmitting ? <ActivityIndicator color={COLORS.brown} /> : null}
             </>
           )}
@@ -228,9 +291,13 @@ const styles = StyleSheet.create({
   subtitle: { color: COLORS.muted, marginTop: 5, textAlign: "center" },
   form: { backgroundColor: COLORS.background, borderRadius: 22, padding: 20, gap: 14, borderWidth: 1, borderColor: COLORS.border },
   heading: { color: COLORS.darkBrown, fontWeight: "800", fontSize: 22 },
+  headingRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  backButton: { width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17 },
+  backButtonActive: { backgroundColor: COLORS.cream },
   help: { color: COLORS.muted, marginTop: -9, marginBottom: 3 },
   employeeName: { color: COLORS.darkBrown, fontWeight: "700" },
   show: { color: COLORS.brown, textAlign: "right", marginTop: -8, fontSize: 12, fontWeight: "700" },
+  forgotPassword: { color: COLORS.brown, fontSize: 13, fontWeight: "700", textAlign: "center", marginTop: -5 },
   hint: { color: COLORS.muted, fontSize: 12, lineHeight: 17 },
   roleOptions: { flexDirection: "row", gap: 8, padding: 4, borderRadius: 12, backgroundColor: COLORS.cream },
   roleOption: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 9 },

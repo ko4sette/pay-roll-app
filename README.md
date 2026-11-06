@@ -10,7 +10,8 @@ A beginner-friendly mobile prototype with a cafe-inspired brown and beige theme.
 - Add/deactivate employee actions
 - Position selection with configured hourly rates when adding an employee
 - One time-in and one time-out per employee per local calendar day
-- Generate sample payroll records and mark them paid
+- Generate daily payroll records from attendance and mark them paid
+- Submit and review staff cashout requests
 - AsyncStorage persistence for local demo data
 - Browse employee, attendance, and payroll records from either role dashboard
 - Open record details through Expo Router dynamic routes
@@ -42,7 +43,7 @@ New employees receive the configured hourly rate for their selected position:
 These are demo configuration values. Update `constants/positions.ts` if the cafe's approved rates change.
 
 ## Important prototype notes
-- Data is stored locally on one device. This is not multi-user cloud synchronization.
+- Data, including payroll and cashout requests, is stored locally on one device. This is not multi-user cloud synchronization.
 - This project has no backend or server-side account store. Employee credentials, including passwords and password-change status, and payroll data are stored in AsyncStorage; the demo admin credential is included in the client app. Employee ID generation is persistent only on this device and cannot guarantee uniqueness across devices or concurrent installations. The role selector, password-change requirement, and role-specific screens are only client-side prototype behavior; they are not secure authentication or access control. Do not use it for real accounts or sensitive payroll data.
 - The Expo Router record routes use the local session and locally stored data for UI-level access checks only; they do not provide server-enforced authorization.
 - A production system should authenticate through a trusted backend, store salted password hashes rather than plaintext passwords, require secure transport, and enforce role permissions on the server. Employee ID is an account identifier, not a secret; always pair it with a password or a stronger authentication factor.

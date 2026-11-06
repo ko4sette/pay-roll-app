@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Employee, Attendance, PayrollRecord } from "../types";
+import { Employee, Attendance, PayrollRecord, CashoutRequest, PasswordAssistanceRequest } from "../types";
 import { DEMO_EMPLOYEES, DEMO_ATTENDANCE, DEMO_PAYROLL } from "../constants/demoData";
 
 const KEY = "cafe_payroll_data_v1";
@@ -8,31 +8,44 @@ const SEEDED_DEMO_PAYROLL_IDS = new Set(["p1", "p2"]);
 const LEGACY_DEMO_EMPLOYEE_IDS = new Set(["e1", "e2", "e3", "e4", "e5"]);
 let employeeIdAllocation = Promise.resolve();
 
-export async function loadData(): Promise<{ employees: Employee[]; attendance: Attendance[]; payroll: PayrollRecord[] }> {
+export async function loadData(): Promise<{ employees: Employee[]; attendance: Attendance[]; payroll: PayrollRecord[]; cashouts: CashoutRequest[]; passwordAssistanceRequests: PasswordAssistanceRequest[] }> {
   const raw = await AsyncStorage.getItem(KEY);
   if (raw) {
-    const data = JSON.parse(raw) as { employees: Employee[]; attendance: Attendance[]; payroll: PayrollRecord[] };
+    const data = JSON.parse(raw) as { employees: Employee[]; attendance: Attendance[]; payroll: PayrollRecord[]; cashouts?: CashoutRequest[]; passwordAssistanceRequests?: PasswordAssistanceRequest[] };
     const employees = data.employees.filter(employee => !LEGACY_DEMO_EMPLOYEE_IDS.has(employee.id));
     const attendance = data.attendance.filter(record => !LEGACY_DEMO_EMPLOYEE_IDS.has(record.employeeId));
     const payroll = data.payroll.filter(
       record => !SEEDED_DEMO_PAYROLL_IDS.has(record.id) && !LEGACY_DEMO_EMPLOYEE_IDS.has(record.employeeId),
     );
+    const cashouts = (data.cashouts ?? []).filter(request => !LEGACY_DEMO_EMPLOYEE_IDS.has(request.employeeId));
+    const passwordAssistanceRequests = (data.passwordAssistanceRequests ?? [])
+      .filter(request => !LEGACY_DEMO_EMPLOYEE_IDS.has(request.employeeId));
     if (
       employees.length !== data.employees.length
       || attendance.length !== data.attendance.length
       || payroll.length !== data.payroll.length
+      || !data.cashouts
+      || cashouts.length !== data.cashouts.length
+      || !data.passwordAssistanceRequests
+      || passwordAssistanceRequests.length !== data.passwordAssistanceRequests.length
     ) {
-      const updated = { ...data, employees, attendance, payroll };
+      const updated = { ...data, employees, attendance, payroll, cashouts, passwordAssistanceRequests };
       await AsyncStorage.setItem(KEY, JSON.stringify(updated));
       return updated;
     }
-    return data;
+    return { ...data, cashouts, passwordAssistanceRequests };
   }
-  const initial = { employees: DEMO_EMPLOYEES, attendance: DEMO_ATTENDANCE, payroll: DEMO_PAYROLL };
+  const initial = {
+    employees: DEMO_EMPLOYEES,
+    attendance: DEMO_ATTENDANCE,
+    payroll: DEMO_PAYROLL,
+    cashouts: [] as CashoutRequest[],
+    passwordAssistanceRequests: [] as PasswordAssistanceRequest[],
+  };
   await AsyncStorage.setItem(KEY, JSON.stringify(initial));
   return initial;
 }
-export async function saveData(data: { employees: Employee[]; attendance: Attendance[]; payroll: PayrollRecord[] }) {
+export async function saveData(data: { employees: Employee[]; attendance: Attendance[]; payroll: PayrollRecord[]; cashouts: CashoutRequest[]; passwordAssistanceRequests: PasswordAssistanceRequest[] }) {
   await AsyncStorage.setItem(KEY, JSON.stringify(data));
 }
 
