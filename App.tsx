@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, SafeAreaView, StatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, SafeAreaView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { StatusBar } from "expo-status-bar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { COLORS } from "./constants/colors";
 import { User, Employee, Attendance, PayrollRecord, CashoutRequest, PasswordAssistanceRequest } from "./types";
-import { loadData, saveData } from "./services/storageService";
+import { loadData, loadPaydayDate, saveData, loadStoreOpen, saveStoreOpen, loadReadNotificationIds, saveReadNotificationIds } from "./services/storageService";
 import { getCashoutRequestError } from "./utils/cashoutUtils";
 import { localDateString } from "./utils/dateUtils";
 import { LoginScreen } from "./screens/auth/LoginScreen";
@@ -14,14 +14,20 @@ import { EmployeesScreen } from "./screens/admin/EmployeesScreen";
 import { NotificationsScreen } from "./screens/admin/NotificationsScreen";
 import { AttendanceScreen } from "./screens/shared/AttendanceScreen";
 import { PayrollScreen } from "./screens/admin/PayrollScreen";
+import { FinanceDashboard, FinanceScreen } from "./screens/admin/FinanceScreen";
+import { RecordsScreen } from "./screens/shared/RecordsScreen";
 import { StaffDashboard } from "./screens/staff/DashboardScreen";
 import { SalaryScreen } from "./screens/staff/SalaryScreen";
 import { ProfileScreen } from "./screens/staff/ProfileScreen";
 import { employeeNeedsPasswordChange } from "./services/authService";
 import { AppText as Text } from "./components/common/AppText";
-import { BRAND_FONT } from "./constants/typography";
+import { BRAND_FONT, BRAND_NAME } from "./constants/typography";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { OnboardingTutorial } from "./components/common/OnboardingTutorial";
+import { NotificationInbox } from "./components/common/NotificationInbox";
+import { buildNotifications } from "./utils/notificationUtils";
 
-type Tab = "Dashboard" | "Employees" | "Attendance" | "Payroll" | "Notifications" | "Salary" | "Profile";
+type Tab = "Dashboard" | "Employees" | "Attendance" | "Payroll" | "Records" | "Payments" | "Notifications" | "Salary" | "Profile";
 
 export default function App() {
   const router = useRouter();
@@ -31,14 +37,22 @@ export default function App() {
   const [payroll, setPayroll] = useState<PayrollRecord[]>([]);
   const [cashouts, setCashouts] = useState<CashoutRequest[]>([]);
   const [passwordAssistanceRequests, setPasswordAssistanceRequests] = useState<PasswordAssistanceRequest[]>([]);
+  const [storeOpen, setStoreOpen] = useState(true);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const [notificationsVisible, setNotificationsVisible] = useState(false);
+  const [paydayDate, setPaydayDate] = useState<string | null>(null);
   const [requestToHandle, setRequestToHandle] = useState<PasswordAssistanceRequest | null>(null);
   const [tab, setTab] = useState<Tab>("Dashboard");
+  const [tutorialVisible, setTutorialVisible] = useState(false);
   const [ready, setReady] = useState(false);
   const pendingCashoutEmployees = useRef(new Set<string>());
 
   useEffect(() => {
     (async () => {
       const data = await loadData();
+      setPaydayDate(await loadPaydayDate());
+      setStoreOpen(await loadStoreOpen());
+      setReadNotificationIds(await loadReadNotificationIds());
       setEmployees(data.employees);
       setAttendance(data.attendance);
       setPayroll(data.payroll);
@@ -53,7 +67,7 @@ export default function App() {
         const needsPasswordChange = parsedUser.role === "staff"
           ? await employeeNeedsPasswordChange(parsedUser.employeeId ?? "")
           : false;
-        if (parsedUser.role === "admin" || (parsedUser.role === "staff" && activeEmployee && !needsPasswordChange)) {
+        if (parsedUser.role === "admin" || parsedUser.role === "finance" || (parsedUser.role === "staff" && activeEmployee && !needsPasswordChange)) {
           setUser(parsedUser);
         } else {
           await AsyncStorage.removeItem("cafe_current_user");
@@ -72,6 +86,10 @@ export default function App() {
   }, [employees, attendance, payroll, cashouts, passwordAssistanceRequests, ready]);
 
   useEffect(() => {
+    if (ready) saveReadNotificationIds(readNotificationIds).catch(() => Alert.alert("Save failed", "Notification read status could not be saved."));
+  }, [readNotificationIds, ready]);
+
+  useEffect(() => {
     pendingCashoutEmployees.current = new Set(
       cashouts.filter(request => request.status === "Pending").map(request => request.employeeId),
     );
@@ -81,12 +99,26 @@ export default function App() {
     setUser(nextUser);
     setTab("Dashboard");
     await AsyncStorage.setItem("cafe_current_user", JSON.stringify(nextUser));
+    if (nextUser.role === "staff") {
+      const tutorialKey = `cafe_employee_dashboard_tutorial_seen_${nextUser.employeeId ?? nextUser.id}`;
+      if (await AsyncStorage.getItem(tutorialKey) !== "true") setTutorialVisible(true);
+    }
   };
 
   const logout = async () => {
     setUser(null);
     setTab("Dashboard");
     await AsyncStorage.removeItem("cafe_current_user");
+  };
+  const dismissTutorial = async () => {
+    setTutorialVisible(false);
+    if (user?.role === "staff") {
+      await AsyncStorage.setItem(`cafe_employee_dashboard_tutorial_seen_${user.employeeId ?? user.id}`, "true");
+    }
+  };
+  const updateStoreOpen = async (open: boolean) => {
+    setStoreOpen(open);
+    await saveStoreOpen(open);
   };
   const openRecords = () => router.push("/home");
   const submitPasswordAssistanceRequest = async (employee: Employee) => {
@@ -172,21 +204,27 @@ export default function App() {
   if (!ready) return <View style={styles.loading}><ActivityIndicator size="large" color={COLORS.brown} /><Text style={styles.loadingText}>Preparing your cafe...</Text></View>;
   if (!user) return <LoginScreen employees={employees} onLogin={login} onPasswordAssistanceRequest={submitPasswordAssistanceRequest} />;
 
-  const adminTabs: Tab[] = ["Dashboard", "Employees", "Attendance", "Payroll", "Notifications"];
+  const adminTabs: Tab[] = ["Dashboard", "Employees", "Attendance", "Payroll", "Records", "Notifications"];
+  const financeTabs: Tab[] = ["Dashboard", "Payments"];
   const staffTabs: Tab[] = ["Dashboard", "Attendance", "Salary", "Profile"];
-  const tabs = user.role === "admin" ? adminTabs : staffTabs;
-
+  const tabs = user.role === "admin" ? adminTabs : user.role === "finance" ? financeTabs : staffTabs;
+  const notifications = buildNotifications({ role: user.role, employeeId: user.employeeId, attendance, payroll, passwordRequests: passwordAssistanceRequests, paydayDate });
+  const unreadCount = notifications.filter(item => !readNotificationIds.includes(item.id)).length;
+  const pendingRequestCount = passwordAssistanceRequests.filter(request => request.status === "Pending").length;
   const screen = () => {
     if (tab === "Dashboard") {
       return user.role === "admin"
         ? <AdminDashboard
-          employees={employees}
           attendance={attendance}
           payroll={payroll}
           onNavigate={setTab}
-          onBrowseRecords={openRecords}
+          paydayDate={paydayDate}
+          storeOpen={storeOpen}
+          onToggleStore={() => updateStoreOpen(!storeOpen)}
         />
-        : <StaffDashboard user={user} attendance={attendance} payroll={payroll} onNavigate={setTab} onBrowseRecords={openRecords} />;
+        : user.role === "finance"
+          ? <FinanceDashboard payroll={payroll} onNavigate={setTab} paydayDate={paydayDate} />
+          : <StaffDashboard user={user} attendance={attendance} payroll={payroll} paydayDate={paydayDate} onNavigate={setTab} onBrowseRecords={openRecords} />;
     }
     if (tab === "Employees" && user.role === "admin") return <EmployeesScreen
       employees={employees}
@@ -200,68 +238,94 @@ export default function App() {
       employees={employees}
       onFixRequest={fixPasswordRequest}
     />;
-    if (tab === "Attendance") return <AttendanceScreen user={user} employees={employees} attendance={attendance} setAttendance={setAttendance} />;
+    if (tab === "Records" && user.role === "admin") return <RecordsScreen embedded />;
+    if (tab === "Attendance") return <AttendanceScreen user={user} employees={employees} attendance={attendance} setAttendance={setAttendance} storeOpen={storeOpen} />;
     if (tab === "Payroll" && user.role === "admin") return <PayrollScreen employees={employees} attendance={attendance} payroll={payroll} setPayroll={setPayroll} cashouts={cashouts} setCashouts={setCashouts} />;
-    if (tab === "Salary" && user.role === "staff") return <SalaryScreen user={user} payroll={payroll} />;
+    if (tab === "Payments" && user.role === "finance") return <FinanceScreen employees={employees} payroll={payroll} setPayroll={setPayroll} />;
+    if (tab === "Salary" && user.role === "staff") return <SalaryScreen user={user} employee={employees.find(employee => employee.id === user.employeeId)} attendance={attendance} payroll={payroll} />;
     if (tab === "Profile" && user.role === "staff") return <ProfileScreen user={user} employee={employees.find(employee => employee.id === user.employeeId)} />;
     return user.role === "admin"
       ? <AdminDashboard
-        employees={employees}
         attendance={attendance}
         payroll={payroll}
         onNavigate={setTab}
-        onBrowseRecords={openRecords}
+        paydayDate={paydayDate}
+        storeOpen={storeOpen}
+        onToggleStore={() => updateStoreOpen(!storeOpen)}
       />
-      : <StaffDashboard user={user} attendance={attendance} payroll={payroll} onNavigate={setTab} onBrowseRecords={openRecords} />;
+      : user.role === "finance"
+        ? <FinanceDashboard payroll={payroll} onNavigate={setTab} paydayDate={paydayDate} />
+        : <StaffDashboard user={user} attendance={attendance} payroll={payroll} paydayDate={paydayDate} onNavigate={setTab} onBrowseRecords={openRecords} />;
   };
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.cream} />
+      <StatusBar style="light" />
       <View style={styles.topbar}>
-        <View style={styles.brandBlock}><MaterialCommunityIcons name="coffee-outline" size={20} color={COLORS.darkBrown} /><View><Text style={styles.brand}>PayMee! Cafe</Text><Text style={styles.role}>{user.role === "admin" ? "ADMIN WORKSPACE" : "STAFF WORKSPACE"}</Text></View></View>
+        <View style={styles.brandBlock}><Text style={styles.brand}>{BRAND_NAME}</Text><Text style={styles.role}>{user.role === "admin" ? "ADMIN" : user.role === "finance" ? "FINANCE" : "EMPLOYEE"}</Text></View>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Open updates, ${unreadCount} unread`} onPress={() => setNotificationsVisible(true)} style={styles.notificationButton}><MaterialCommunityIcons name="bell-outline" size={21} color={COLORS.white} />{unreadCount > 0 ? <View style={styles.unreadBadge}><Text style={styles.unreadBadgeText}>{unreadCount > 9 ? "9+" : unreadCount}</Text></View> : null}</TouchableOpacity>
+        {user.role === "staff" ? <TouchableOpacity accessibilityRole="button" accessibilityLabel="Replay employee dashboard guide" onPress={() => setTutorialVisible(true)} style={styles.helpButton}><MaterialCommunityIcons name="help-circle-outline" size={19} color={COLORS.white} /><Text style={styles.helpText}>Help</Text></TouchableOpacity> : null}
         <TouchableOpacity onPress={logout} style={styles.logout}><Text style={styles.logoutText}>Log out</Text></TouchableOpacity>
       </View>
-      <View style={styles.content}>{screen()}</View>
+      <View key={`${user.id}-${tab}`} style={styles.content}>{screen()}</View>
       <View style={styles.tabbar}>
         {tabs.map((item) => (
-          <TouchableOpacity key={item} onPress={() => setTab(item)} style={[styles.tab, tab === item && styles.activeTab]}>
-            <MaterialCommunityIcons name={tabIcon(item)} size={19} color={tab === item ? COLORS.brown : COLORS.muted} />
-            <Text style={[styles.tabText, tab === item && styles.activeTabText]}>{item}</Text>
+          <TouchableOpacity key={item} accessibilityRole="button" accessibilityLabel={item} onPress={() => setTab(item)} style={[styles.tab, tab === item && styles.activeTab]}>
+            <MaterialCommunityIcons name={tabIcon(item)} size={17} color={tab === item ? COLORS.darkBrown : COLORS.muted} />
+          {item === "Notifications" && pendingRequestCount > 0 ? <View style={styles.requestCount}><Text style={styles.requestCountText}>{pendingRequestCount > 9 ? "9+" : pendingRequestCount}</Text></View> : null}
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[styles.tabText, tab === item && styles.activeTabText]}>{tabLabel(item)}</Text>
           </TouchableOpacity>
         ))}
       </View>
+      <OnboardingTutorial visible={tutorialVisible} onDismiss={dismissTutorial} />
+      <NotificationInbox
+        visible={notificationsVisible}
+        notifications={notifications}
+        readIds={readNotificationIds}
+        onRead={id => setReadNotificationIds(old => old.includes(id) ? old : [...old, id])}
+        onReadAll={() => setReadNotificationIds(old => [...new Set([...old, ...notifications.map(item => item.id)])])}
+        onOpen={notification => { setReadNotificationIds(old => old.includes(notification.id) ? old : [...old, notification.id]); setNotificationsVisible(false); setTab(notification.route as Tab); }}
+        onClose={() => setNotificationsVisible(false)}
+      />
     </SafeAreaView>
   );
 }
 
+function tabLabel(tab: Tab): string {
+  const labels: Partial<Record<Tab, string>> = { Dashboard: "Home", Notifications: "Requests", Salary: "Pay" };
+  return labels[tab] ?? tab;
+}
+
 function tabIcon(tab: Tab): React.ComponentProps<typeof MaterialCommunityIcons>["name"] {
   const icons: Record<Tab, React.ComponentProps<typeof MaterialCommunityIcons>["name"]> = {
-    Dashboard: "view-dashboard-outline",
-    Employees: "account-group-outline",
-    Attendance: "clock-outline",
-    Payroll: "cash-multiple",
-    Notifications: "bell-outline",
-    Salary: "cash",
-    Profile: "account-circle-outline",
+    Dashboard: "view-dashboard-outline", Employees: "account-group-outline", Attendance: "clock-outline",
+    Payroll: "file-document-outline", Records: "folder-multiple-outline", Payments: "cash-multiple", Notifications: "bell-outline",
+    Salary: "wallet-outline", Profile: "account-outline",
   };
-  return icons[tab] ?? "circle-outline";
+  return icons[tab];
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.cream },
   loadingText: { marginTop: 12, color: COLORS.brown },
-  topbar: { backgroundColor: COLORS.cream, paddingHorizontal: 18, paddingVertical: 13, flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomWidth: 1, borderBottomColor: COLORS.beige },
-  brandBlock: { flexDirection: "row", alignItems: "center", gap: 7 },
-  brand: { color: COLORS.darkBrown, fontSize: 19, fontWeight: "800", fontFamily: BRAND_FONT },
-  role: { color: COLORS.muted, fontSize: 10, letterSpacing: 1.2, marginTop: 3 },
-  logout: { backgroundColor: COLORS.beige, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
-  logoutText: { color: COLORS.darkBrown, fontWeight: "700", fontSize: 12 },
+  topbar: { backgroundColor: COLORS.darkBrown, paddingHorizontal: 18, paddingVertical: 20, minHeight: 104, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", borderBottomWidth: 1, borderBottomColor: COLORS.brown },
+  brandBlock: { gap: 3, flexShrink: 1 },
+  brand: { color: COLORS.white, fontSize: 28, lineHeight: 34, fontWeight: "800", fontFamily: BRAND_FONT },
+  role: { color: "#D7C8B7", fontSize: 12, lineHeight: 16, letterSpacing: 1.5, fontWeight: "700" },
+  logout: { backgroundColor: COLORS.mediumBrown, paddingHorizontal: 15, minHeight: 44, justifyContent: "center", borderRadius: 10, marginLeft: 12 },
+  logoutText: { color: COLORS.white, fontWeight: "700", fontSize: 15 },
+  notificationButton: { position: "relative", minWidth: 38, height: 42, alignItems: "center", justifyContent: "center", marginLeft: "auto" },
+  unreadBadge: { position: "absolute", top: 1, right: 1, minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8, backgroundColor: COLORS.error, alignItems: "center", justifyContent: "center" },
+  unreadBadgeText: { color: COLORS.white, fontSize: 9, fontWeight: "900" },
+  helpButton: { minHeight: 42, paddingHorizontal: 7, alignItems: "center", justifyContent: "center", marginLeft: "auto" },
+  helpText: { color: COLORS.white, fontSize: 10, fontWeight: "700" },
   content: { flex: 1 },
-  tabbar: { flexDirection: "row", backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.beige, paddingBottom: 4, paddingTop: 5 },
-  tab: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 5, borderRadius: 10, gap: 2 },
-  activeTab: { backgroundColor: COLORS.cream },
-  tabText: { color: COLORS.muted, textAlign: "center", fontSize: 10, lineHeight: 15 },
-  activeTabText: { color: COLORS.brown, fontWeight: "800" }
+  tabbar: { flexDirection: "row", backgroundColor: "#D8C9B6", borderTopWidth: 1, borderTopColor: COLORS.beige, paddingHorizontal: 7, paddingVertical: 6 },
+  tab: { flex: 1, minWidth: 0, minHeight: 50, alignItems: "center", justifyContent: "center", paddingHorizontal: 1, borderRadius: 9, gap: 1 },
+  requestCount: { position: "absolute", top: 2, right: "22%", minWidth: 15, height: 15, borderRadius: 8, paddingHorizontal: 3, backgroundColor: COLORS.error, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#D8C9B6" },
+  requestCountText: { color: COLORS.white, fontSize: 9, lineHeight: 12, fontWeight: "900" },
+  activeTab: { backgroundColor: "#BFA98E" },
+  tabText: { color: COLORS.muted, textAlign: "center", fontSize: 9, lineHeight: 12, flexShrink: 1 },
+  activeTabText: { color: COLORS.darkBrown, fontWeight: "800" }
 });

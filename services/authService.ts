@@ -23,6 +23,11 @@ export async function authenticateDemoAdmin(email: string, password: string): Pr
   };
 }
 
+export async function authenticateDemoFinance(email: string, password: string): Promise<User | null> {
+  if (email.trim().toLowerCase() !== "finance@cafepay.com" || password !== "finance123") return null;
+  return { id: "finance-1", name: "Cafe Finance", email: "finance@cafepay.com", role: "finance" };
+}
+
 async function loadCredentials(): Promise<CredentialStore> {
   const raw = await AsyncStorage.getItem(CREDENTIALS_KEY);
   const credentials = raw ? JSON.parse(raw) as CredentialStore : {};
@@ -36,12 +41,15 @@ async function loadCredentials(): Promise<CredentialStore> {
 }
 
 export async function authenticateEmployee(
-  employeeNumber: string,
+  identifier: string,
   password: string,
   employees: Employee[],
 ): Promise<{ user: User; mustChangePassword: boolean } | null> {
+  const normalizedIdentifier = identifier.trim();
   const employee = employees.find(
-    item => item.employeeNumber.toUpperCase() === employeeNumber && item.employmentStatus === "Active",
+    item => item.employmentStatus === "Active"
+      && (item.employeeNumber.trim().toUpperCase() === normalizedIdentifier.toUpperCase()
+        || item.email.trim().toLowerCase() === normalizedIdentifier.toLowerCase()),
   );
   if (!employee) return null;
 

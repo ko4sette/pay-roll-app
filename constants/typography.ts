@@ -10,3 +10,5 @@ export const FONT_FAMILY_BY_WEIGHT = {
 } as const;
 
 export const BRAND_FONT = "Fredoka_600SemiBold";
+export const SECONDARY_FONT = "serif";
+export const BRAND_NAME = "PayMee! Cafe";

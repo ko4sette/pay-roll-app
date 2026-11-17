@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Alert, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from "react-native";
 import { AppText as Text } from "../../components/common/AppText";
 import { Employee } from "../../types";
 import { ScreenContainer } from "../../components/common/ScreenContainer";
@@ -7,12 +7,13 @@ import { AppCard } from "../../components/common/AppCard";
 import { Field } from "../../components/common/Field";
 import { AppButton } from "../../components/common/AppButton";
 import { StatusBadge } from "../../components/common/StatusBadge";
+import { EmptyState } from "../../components/common/EmptyState";
 import { COLORS } from "../../constants/colors";
 import { peso } from "../../utils/currencyUtils";
 import { issueTemporaryPassword } from "../../services/authService";
 import { generateEmployeeNumber } from "../../services/storageService";
 import { Position, POSITIONS, POSITION_DESCRIPTIONS, POSITION_RATES } from "../../constants/positions";
-import { localDateString } from "../../utils/dateUtils";
+import { formatUsDate, isValidPhoneNumber, localDateString } from "../../utils/dateUtils";
 
 interface EmployeesScreenProps {
   employees: Employee[];
@@ -35,10 +36,13 @@ export function EmployeesScreen({
   const [name, setName] = useState("");
   const [position, setPosition] = useState<Position>("Barista");
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneEditEmployeeId, setPhoneEditEmployeeId] = useState<string | null>(null);
   const [positionPickerVisible, setPositionPickerVisible] = useState(false);
   const [creating, setCreating] = useState(false);
   const hourlyRate = POSITION_RATES[position];
   const selectedEmployee = employees.find(employee => employee.id === selectedEmployeeId);
+  const phoneEditEmployee = employees.find(employee => employee.id === phoneEditEmployeeId);
   const filtered = employees.filter(employee =>
     `${employee.fullName} ${employee.employeeNumber} ${employee.position}`.toLowerCase().includes(search.toLowerCase()),
   );
@@ -52,6 +56,7 @@ export function EmployeesScreen({
   const clearForm = () => {
     setName("");
     setEmail("");
+    setPhoneNumber("");
     setPosition("Barista");
   };
 
@@ -64,8 +69,8 @@ export function EmployeesScreen({
 
   const add = async () => {
     if (creating) return;
-    if (!name.trim() || !email.trim() || employees.some(employee => employee.email.toLowerCase() === email.trim().toLowerCase())) {
-      Alert.alert("Check details", "Enter a name and a unique email address.");
+    if (!name.trim() || !email.trim() || !phoneNumber.trim() || !isValidPhoneNumber(phoneNumber) || employees.some(employee => employee.email.toLowerCase() === email.trim().toLowerCase())) {
+      Alert.alert("Check details", "Enter a name, a unique email address, and a valid phone number.");
       return;
     }
 
@@ -77,7 +82,7 @@ export function EmployeesScreen({
         employeeNumber,
         fullName: name.trim(),
         email: email.trim(),
-        contactNumber: "",
+        contactNumber: phoneNumber.trim(),
         position,
         employmentType: "Full-time",
         salaryType: "Hourly",
@@ -98,6 +103,17 @@ export function EmployeesScreen({
     } finally {
       setCreating(false);
     }
+  };
+
+  const savePhoneNumber = () => {
+    if (!phoneEditEmployee || !isValidPhoneNumber(phoneNumber)) {
+      Alert.alert("Check phone number", "Enter a valid phone number with 7 to 15 digits.");
+      return;
+    }
+    setEmployees(old => old.map(employee => employee.id === phoneEditEmployee.id
+      ? { ...employee, contactNumber: phoneNumber.trim() }
+      : employee));
+    setPhoneEditEmployeeId(null);
   };
 
   const resetPassword = async (employee: Employee) => {
@@ -143,26 +159,11 @@ export function EmployeesScreen({
     <Field label="SEARCH EMPLOYEES" value={search} onChangeText={setSearch} placeholder="Search name, ID, position" />
     <AppButton title="+ Add employee" onPress={() => setAdding(true)} />
 
-    <View style={[styles.tableRow, styles.tableHeader]}>
-      <Text style={[styles.headerText, styles.nameColumn]}>Employee Name</Text>
-      <Text style={[styles.headerText, styles.idColumn]}>Employee ID</Text>
-      <Text style={[styles.headerText, styles.positionColumn]}>Position</Text>
-      <Text style={[styles.headerText, styles.actionColumn]}>Action</Text>
-    </View>
     {filtered.map(employee => <AppCard key={employee.id} style={styles.employeeRow}>
-      <Text numberOfLines={2} style={[styles.name, styles.nameColumn]}>{employee.fullName}</Text>
-      <Text numberOfLines={1} style={[styles.meta, styles.idColumn]}>{employee.employeeNumber}</Text>
-      <Text numberOfLines={2} style={[styles.meta, styles.positionColumn]}>{employee.position}</Text>
-      <View style={styles.actionColumn}>
-        <AppButton
-          title="View Details"
-          secondary
-          onPress={() => setSelectedEmployeeId(employee.id)}
-          style={styles.viewButton}
-        />
-      </View>
+      <View style={styles.employeeHeading}><View style={{ flex: 1 }}><Text numberOfLines={1} style={styles.name}>{employee.fullName}</Text><Text style={styles.meta}>{employee.position} · {employee.employeeNumber}</Text></View><StatusBadge status={employee.employmentStatus} /></View>
+      <View style={styles.employeeFooter}><Text style={styles.employeePay}>{peso(employee.salaryAmount)} / {employee.salaryType === "Hourly" ? "hr" : "month"}</Text><AppButton title="View details" secondary onPress={() => setSelectedEmployeeId(employee.id)} style={styles.viewButton} /></View>
     </AppCard>)}
-    {filtered.length === 0 && <Text style={styles.meta}>No employees found.</Text>}
+    {filtered.length === 0 && <EmptyState title={search ? "No match found" : "Your team starts here"} message={search ? "Try another name, employee ID, or position." : "Add the café team so you can manage shifts and prepare payroll."} />}
 
     <Modal visible={adding} transparent animationType="slide" onRequestClose={cancelAdd}>
       <View style={styles.modalBackdrop}>
@@ -171,6 +172,7 @@ export function EmployeesScreen({
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
             <Field label="FULL NAME" value={name} onChangeText={setName} placeholder="Employee name" />
             <Field label="EMAIL" value={email} onChangeText={setEmail} placeholder="employee@cafe.com" autoCapitalize="none" keyboardType="email-address" />
+            <Field label="PHONE NUMBER" icon="phone-outline" value={phoneNumber} onChangeText={setPhoneNumber} placeholder="e.g. +63 912 345 6789" keyboardType="phone-pad" />
             <Text style={styles.label}>POSITION</Text>
             <TouchableOpacity
               accessibilityRole="button"
@@ -179,7 +181,7 @@ export function EmployeesScreen({
               style={styles.picker}
             >
               <Text style={styles.pickerText}>{position}</Text>
-              <Text style={styles.pickerArrow}>⌄</Text>
+              <Text style={styles.pickerArrow}>Change</Text>
             </TouchableOpacity>
             <View style={styles.rate}>
               <Text style={styles.rateLabel}>HOURLY RATE</Text>
@@ -215,12 +217,13 @@ export function EmployeesScreen({
               <Detail label="Position" value={selectedEmployee.position} />
               <Detail label="Email" value={selectedEmployee.email} />
               <Detail label="Contact Number" value={selectedEmployee.contactNumber || "Not provided"} />
+              <AppButton title="Update phone number" secondary onPress={() => { setPhoneNumber(selectedEmployee.contactNumber); setPhoneEditEmployeeId(selectedEmployee.id); }} />
               <Detail label="Employment Type" value={selectedEmployee.employmentType} />
               <Detail
                 label="Salary"
                 value={`${peso(selectedEmployee.salaryAmount)} / ${selectedEmployee.salaryType === "Hourly" ? "hour" : "month"}`}
               />
-              <Detail label="Date Hired" value={selectedEmployee.dateHired} />
+              <Detail label="Date Hired" value={formatUsDate(selectedEmployee.dateHired)} />
               <Detail label="Employment Status" value={selectedEmployee.employmentStatus} />
             </ScrollView>
             <View style={styles.detailActions}>
@@ -237,6 +240,17 @@ export function EmployeesScreen({
               <AppButton title="Close" onPress={() => setSelectedEmployeeId(null)} />
             </View>
           </>}
+        </View>
+      </View>
+    </Modal>
+
+    <Modal visible={Boolean(phoneEditEmployee)} transparent animationType="fade" onRequestClose={() => setPhoneEditEmployeeId(null)}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.positionModal}>
+          <Text style={styles.modalTitle}>Update phone number</Text>
+          <Field label="PHONE NUMBER" value={phoneNumber} onChangeText={setPhoneNumber} placeholder="e.g. +63 912 345 6789" keyboardType="phone-pad" />
+          <AppButton title="Save phone number" onPress={savePhoneNumber} />
+          <AppButton title="Cancel" secondary onPress={() => setPhoneEditEmployeeId(null)} />
         </View>
       </View>
     </Modal>
@@ -275,10 +289,10 @@ const styles = StyleSheet.create({
   heading: { color: COLORS.darkBrown, fontWeight: "800", fontSize: 17 },
   form: { gap: 12, paddingVertical: 8 },
   label: { color: COLORS.darkBrown, fontSize: 12, fontWeight: "700", marginBottom: -6 },
-  picker: { borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.white, borderRadius: 11, paddingHorizontal: 12, paddingVertical: 13, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  picker: { borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.white, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 13, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   pickerText: { color: COLORS.text },
-  pickerArrow: { color: COLORS.muted, fontSize: 18 },
-  rate: { backgroundColor: COLORS.cream, padding: 12, borderRadius: 11, gap: 4 },
+  pickerArrow: { color: COLORS.brown, fontSize: 13, fontWeight: "700" },
+  rate: { backgroundColor: COLORS.cream, padding: 12, borderRadius: 12, gap: 4 },
   rateLabel: { color: COLORS.muted, fontSize: 11, fontWeight: "700" },
   rateValue: { color: COLORS.darkBrown, fontWeight: "800" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", padding: 16 },
@@ -287,27 +301,23 @@ const styles = StyleSheet.create({
   modalTitle: { color: COLORS.darkBrown, fontSize: 18, fontWeight: "800", marginBottom: 4 },
   modalActions: { flexDirection: "row", gap: 8 },
   modalActionButton: { flex: 1, paddingHorizontal: 8 },
-  option: { paddingVertical: 12, paddingHorizontal: 10, borderRadius: 10, backgroundColor: COLORS.cream, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  option: { paddingVertical: 12, paddingHorizontal: 10, borderRadius: 12, backgroundColor: COLORS.cream, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   optionInfo: { flex: 1 },
   optionText: { color: COLORS.darkBrown, fontWeight: "700" },
   optionDescription: { color: COLORS.muted, fontSize: 11, marginTop: 3 },
   optionRate: { color: COLORS.brown, fontSize: 12, fontWeight: "700" },
-  tableHeader: { paddingHorizontal: 10, paddingVertical: 10, backgroundColor: COLORS.cream, borderRadius: 10 },
-  tableRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  employeeRow: { flexDirection: "row", alignItems: "center", gap: 6, padding: 10 },
-  headerText: { color: COLORS.darkBrown, fontSize: 11, fontWeight: "800" },
-  name: { color: COLORS.darkBrown, fontSize: 14, fontWeight: "800" },
-  meta: { color: COLORS.muted, fontSize: 12 },
-  nameColumn: { flex: 1.2 },
-  idColumn: { flex: 0.9 },
-  positionColumn: { flex: 1 },
-  actionColumn: { width: 100, alignItems: "flex-end" },
-  viewButton: { paddingVertical: 9, paddingHorizontal: 8 },
+  employeeRow: { gap: 12, backgroundColor: "#EDE1D0" },
+  employeeHeading: { flexDirection: "row", alignItems: "center", gap: 11 },
+  name: { color: COLORS.darkBrown, fontSize: 16, fontWeight: "800" },
+  meta: { color: COLORS.muted, fontSize: 13, marginTop: 3 },
+  employeeFooter: { borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  employeePay: { color: COLORS.brown, fontSize: 14, fontWeight: "700" },
+  viewButton: { paddingVertical: 9, paddingHorizontal: 14 },
   detailsHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   detailsTitle: { flex: 1 },
   detailsScroll: { flexGrow: 0 },
   details: { gap: 8, paddingVertical: 4 },
-  detailRow: { paddingVertical: 9, paddingHorizontal: 11, backgroundColor: COLORS.cream, borderRadius: 10, gap: 3 },
+  detailRow: { paddingVertical: 9, paddingHorizontal: 11, backgroundColor: COLORS.cream, borderRadius: 12, gap: 3 },
   detailLabel: { color: COLORS.muted, fontSize: 11, fontWeight: "700" },
   detailValue: { color: COLORS.darkBrown, fontSize: 14, fontWeight: "600" },
   detailActions: { gap: 8 },

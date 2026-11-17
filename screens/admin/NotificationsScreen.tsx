@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { Modal, StyleSheet, TouchableOpacity, View } from "react-native";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { AppText as Text } from "../../components/common/AppText";
 import { ScreenContainer } from "../../components/common/ScreenContainer";
 import { AppCard } from "../../components/common/AppCard";
@@ -25,7 +24,7 @@ export function NotificationsScreen({ requests, employees, onFixRequest }: Notif
     : undefined;
   const requestDate = (value: string) => {
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString("en-US", { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
   };
 
   return <>
@@ -77,6 +76,7 @@ export function NotificationsScreen({ requests, employees, onFixRequest }: Notif
         </View>
       </View>
     </Modal>
+
   </>;
 }
 
@@ -89,8 +89,8 @@ function NotificationItem({ request, onPress }: { request: PasswordAssistanceReq
     activeOpacity={0.75}
   >
     <AppCard style={styles.notificationCard}>
-      <Text style={styles.requestName}>Forgot Password Request</Text>
-      <MaterialCommunityIcons name="chevron-right" size={22} color={COLORS.muted} />
+      <View style={{ flex: 1 }}><Text style={styles.requestName}>Forgot password</Text><Text style={styles.requestMeta}>{request.status === "Pending" ? "Waiting for admin review" : "Request resolved"}</Text></View>
+      <Text style={styles.reviewText}>Review</Text>
     </AppCard>
   </TouchableOpacity>;
 }
@@ -98,8 +98,10 @@ function NotificationItem({ request, onPress }: { request: PasswordAssistanceReq
 const styles = StyleSheet.create({
   body: { color: COLORS.muted, lineHeight: 20 },
   sectionTitle: { color: COLORS.darkBrown, fontSize: 14, fontWeight: "800", marginTop: 4 },
-  notificationCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  requestName: { color: COLORS.darkBrown, fontSize: 14, fontWeight: "800" },
+  notificationCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  requestName: { color: COLORS.darkBrown, fontSize: 15, fontWeight: "800" },
+  requestMeta: { color: COLORS.muted, fontSize: 13, marginTop: 4 },
+  reviewText: { color: COLORS.brown, fontSize: 13, fontWeight: "800" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", padding: 18 },
   modal: { width: "100%", maxWidth: 460, backgroundColor: COLORS.background, borderRadius: 18, padding: 18, gap: 8 },
   modalTitle: { color: COLORS.darkBrown, fontSize: 16, fontWeight: "800", marginBottom: 4 },

@@ -1,64 +1,89 @@
 import React from "react";
-import { StyleSheet, useWindowDimensions, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppText as Text } from "../../components/common/AppText";
 import { Employee, User } from "../../types";
 import { ScreenContainer } from "../../components/common/ScreenContainer";
 import { AppCard } from "../../components/common/AppCard";
+import { StatusBadge } from "../../components/common/StatusBadge";
 import { COLORS } from "../../constants/colors";
+import { SECONDARY_FONT } from "../../constants/typography";
 import { peso } from "../../utils/currencyUtils";
+import { formatUsDate } from "../../utils/dateUtils";
 
 export function ProfileScreen({ user, employee }: { user: User; employee?: Employee }) {
-  const { width } = useWindowDimensions();
   const displayName = employee?.fullName.trim() || user.name.trim() || "Employee";
-  const initials = displayName.split(/\s+/).slice(0, 2).map(part => part[0]?.toUpperCase()).join("");
-  const position = employee?.position ?? "Position not available";
-  const email = employee?.email ?? user.email;
-  const employeeNumber = employee?.employeeNumber ?? user.employeeId ?? "Not assigned";
+  const employmentStatus = employee?.employmentStatus ?? "Active";
   const salary = employee
-    ? `${peso(employee.salaryAmount)}/${employee.salaryType === "Hourly" ? "hour" : "month"}`
+    ? `${peso(employee.salaryAmount)} / ${employee.salaryType === "Hourly" ? "hour" : "month"}`
     : "Not available";
 
-  return <ScreenContainer title="My Profile" subtitle="Your account information.">
-    <View style={styles.profileLayout}>
-      <AppCard style={styles.identityCard}>
-        <View style={[styles.avatar, width < 360 && styles.avatarSmall]}>
-          <Text style={styles.initials}>{initials || "E"}</Text>
-        </View>
-        <View style={styles.identity}>
+  return <ScreenContainer title="My Profile" subtitle="Your work and contact details.">
+    <AppCard style={styles.identityCard}>
+      <View style={styles.identityTop}>
+        <View style={styles.avatar}><MaterialCommunityIcons name="account-outline" size={34} color={COLORS.white} /></View>
+        <View style={styles.identityCopy}>
           <Text style={styles.name}>{displayName}</Text>
-          <Text style={styles.position}>{position}</Text>
+          <Text style={styles.position}>{employee?.position ?? "Position not available"}</Text>
         </View>
-      </AppCard>
+      </View>
+      <View style={styles.identityFooter}>
+        <Text style={styles.employeeNumber}>{employee?.employeeNumber ?? user.employeeId ?? "Employee ID unavailable"}</Text>
+        <StatusBadge status={employmentStatus} />
+      </View>
+    </AppCard>
 
-      <AppCard style={styles.informationCard}>
-        <Text style={styles.cardTitle}>EMPLOYEE INFORMATION</Text>
-        <Info label="Email Address" value={email} />
-        <Info label="Employee ID" value={employeeNumber} />
-        <Info label="Hourly Rate" value={salary} />
-      </AppCard>
-    </View>
+    <AppCard style={styles.detailCard}>
+      <View style={styles.sectionHeading}>
+        <MaterialCommunityIcons name="card-account-details-outline" size={20} color={COLORS.brown} />
+        <Text style={styles.sectionTitle}>Contact details</Text>
+      </View>
+      <Info icon="email-outline" label="Email" value={employee?.email || user.email || "Not provided"} />
+      <View style={styles.rule} />
+      <Info icon="phone-outline" label="Phone" value={employee?.contactNumber || "Not provided"} />
+    </AppCard>
+
+    <AppCard style={styles.detailCard}>
+      <View style={styles.sectionHeading}>
+        <MaterialCommunityIcons name="storefront-outline" size={20} color={COLORS.brown} />
+        <Text style={styles.sectionTitle}>Employment</Text>
+      </View>
+      <Info icon="briefcase-outline" label="Employment type" value={employee?.employmentType ?? "Not available"} />
+      <View style={styles.rule} />
+      <Info icon="calendar-month-outline" label="Date hired" value={employee?.dateHired ? formatUsDate(employee.dateHired) : "Not available"} />
+      <View style={styles.rule} />
+      <Info icon="cash-multiple" label={employee?.salaryType === "Monthly" ? "Monthly salary" : "Hourly rate"} value={salary} />
+    </AppCard>
+    <Text style={styles.note}>For updates to your employee details, contact your administrator.</Text>
   </ScreenContainer>;
 }
 
-function Info({ label, value }: { label: string; value: string }) {
-  return <View style={styles.infoItem}>
-    <Text style={styles.label}>{label}</Text>
-    <Text style={styles.value}>{value}</Text>
+function Info({ icon, label, value }: { icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"]; label: string; value: string }) {
+  return <View style={styles.infoRow}>
+    <MaterialCommunityIcons name={icon} size={19} color={COLORS.mediumBrown} />
+    <View style={styles.infoCopy}>
+      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.value}>{value}</Text>
+    </View>
   </View>;
 }
 
 const styles = StyleSheet.create({
-  profileLayout: { flexDirection: "column", gap: 12 },
-  identityCard: { width: "100%", flexDirection: "row", alignItems: "center", gap: 18 },
-  informationCard: { width: "100%", gap: 12 },
-  avatar: { width: 124, height: 124, borderRadius: 62, backgroundColor: COLORS.cream, alignItems: "center", justifyContent: "center" },
-  avatarSmall: { width: 100, height: 100, borderRadius: 50 },
-  initials: { color: COLORS.brown, fontSize: 40, fontWeight: "700" },
-  identity: { flex: 1 },
-  name: { color: COLORS.darkBrown, fontSize: 19, fontWeight: "900" },
-  position: { color: COLORS.muted, fontSize: 13, marginTop: 4 },
-  cardTitle: { color: COLORS.darkBrown, fontSize: 14, fontWeight: "800", letterSpacing: 0.4, marginBottom: 2 },
-  infoItem: { gap: 4 },
+  identityCard: { backgroundColor: COLORS.darkBrown, borderColor: COLORS.darkBrown, padding: 18, gap: 16 },
+  identityTop: { flexDirection: "row", alignItems: "center", gap: 13 },
+  avatar: { width: 58, height: 58, borderRadius: 18, backgroundColor: COLORS.mediumBrown, alignItems: "center", justifyContent: "center" },
+  identityCopy: { flex: 1 },
+  name: { color: COLORS.white, fontSize: 21, lineHeight: 27, fontWeight: "800", fontFamily: SECONDARY_FONT },
+  position: { color: "#D7C8B7", marginTop: 3, fontSize: 14 },
+  identityFooter: { borderTopWidth: 1, borderTopColor: "#705A47", paddingTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  employeeNumber: { color: COLORS.white, fontSize: 13, fontWeight: "700", letterSpacing: 0.4 },
+  detailCard: { gap: 13 },
+  sectionHeading: { flexDirection: "row", alignItems: "center", gap: 8, paddingBottom: 2 },
+  sectionTitle: { color: COLORS.darkBrown, fontSize: 18, fontWeight: "700", fontFamily: SECONDARY_FONT },
+  infoRow: { flexDirection: "row", alignItems: "flex-start", gap: 11 },
+  infoCopy: { flex: 1, gap: 3 },
   label: { color: COLORS.muted, fontSize: 12 },
-  value: { color: COLORS.darkBrown, fontWeight: "700" },
+  value: { color: COLORS.darkBrown, fontSize: 15, fontWeight: "600" },
+  rule: { height: 1, backgroundColor: COLORS.border, marginLeft: 30 },
+  note: { color: COLORS.muted, fontSize: 12, lineHeight: 18, paddingHorizontal: 3 },
 });

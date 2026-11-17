@@ -1,7 +1,8 @@
 export const COLORS = {
-  brown: "#6F4E37", darkBrown: "#3E2723", mediumBrown: "#8B5E3C",
-  beige: "#DCC7AA", cream: "#F5EFE6", background: "#FAF7F2",
-  white: "#FFFFFF", text: "#3E2723", muted: "#8A7A6A",
-  success: "#4F7942", warning: "#D99A2B", error: "#B94A48",
-  border: "#E7D9C7"
+  brown: "#73563F", darkBrown: "#382A22", mediumBrown: "#86684F",
+  beige: "#CBB99F", cream: "#EDE1D0", background: "#E4D8C7",
+  white: "#F7F1E8", text: "#382A22", muted: "#716457",
+  success: "#526A55", warning: "#9B743D", error: "#A4564C",
+  sage: "#71816A", berry: "#985A59", caramel: "#C9A96D",
+  border: "#CFC0AC"
 };
