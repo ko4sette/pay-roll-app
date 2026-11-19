@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { ImageBackground, SafeAreaView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { ImageBackground, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppButton } from "../../components/common/AppButton";
 import { Field } from "../../components/common/Field";
 import { AppText as Text } from "../../components/common/AppText";
@@ -49,26 +51,32 @@ export function ForgotPasswordScreen({ employees, onBack, onSubmit }: ForgotPass
 
   return <SafeAreaView style={styles.safe}>
     <ImageBackground source={require("../../assets/paper-grid.jpg")} resizeMode="cover" imageStyle={styles.paper} style={StyleSheet.absoluteFill} />
-    <View style={styles.page}>
+    <KeyboardAvoidingView style={styles.keyboardArea} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <View style={styles.hero}>
         <Text style={styles.brand}>{BRAND_NAME}</Text>
         <Text style={styles.tagline}>Payroll for your café team</Text>
       </View>
       <View style={styles.form}>
-        <View style={styles.headingRow}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Back to employee login"
-            onPress={onBack}
-            style={styles.backButton}
-          >
-            <Text style={styles.backText}>Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.heading}>Forgot Password?</Text>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Back to sign in"
+          onPress={onBack}
+          style={styles.backButton}
+        >
+          <MaterialCommunityIcons name="arrow-left" size={18} color={COLORS.brown} />
+          <Text style={styles.backText}>Back to sign in</Text>
+        </TouchableOpacity>
+        <View style={styles.titleBlock}>
+          <View style={styles.titleIcon}><MaterialCommunityIcons name="lock-question" size={22} color={COLORS.brown} /></View>
+          <View style={styles.titleCopy}>
+            <Text style={styles.heading}>Forgot password?</Text>
+            <Text style={styles.help}>Enter your Employee ID to request help accessing your account.</Text>
+          </View>
         </View>
-        <Text style={styles.help}>Enter your Employee ID to send a password assistance request to the administrator.</Text>
         <Field
           label="EMPLOYEE ID"
+          icon="badge-account-outline"
           value={employeeId}
           onChangeText={value => {
             setEmployeeId(value);
@@ -81,25 +89,29 @@ export function ForgotPasswordScreen({ employees, onBack, onSubmit }: ForgotPass
         />
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
         {confirmation ? <Text accessibilityLiveRegion="polite" style={styles.confirmation}>{confirmation}</Text> : null}
-        <AppButton title={submitting ? "Sending request..." : "Notify Admin"} onPress={submit} disabled={submitting} />
+        <AppButton title={submitting ? "Sending request..." : "Send request"} onPress={submit} disabled={submitting} />
       </View>
-    </View>
+    </ScrollView>
+    </KeyboardAvoidingView>
   </SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
   paper: { opacity: 0.18 },
-  page: { flex: 1, justifyContent: "center", padding: 22 },
-  hero: { alignItems: "center", marginBottom: 25 },
+  keyboardArea: { flex: 1 },
+  page: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 22, paddingVertical: 18 },
+  hero: { width: "100%", maxWidth: 480, alignItems: "center", marginBottom: 20 },
   brand: { color: COLORS.darkBrown, fontSize: 40, lineHeight: 48, fontWeight: "900", marginTop: 5, fontFamily: BRAND_FONT, textAlign: "center" },
   tagline: { color: COLORS.muted, fontSize: 17, marginTop: 5, fontFamily: SECONDARY_FONT, textAlign: "center" },
-  form: { backgroundColor: COLORS.background, borderRadius: 22, padding: 20, gap: 14, borderWidth: 1, borderColor: COLORS.border },
-  headingRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  form: { width: "100%", maxWidth: 480, backgroundColor: COLORS.background, borderRadius: 22, padding: 20, gap: 16, borderWidth: 1, borderColor: COLORS.border },
   heading: { color: COLORS.darkBrown, fontWeight: "800", fontSize: 22 },
-  backButton: { minHeight: 36, paddingHorizontal: 8, alignItems: "center", justifyContent: "center", borderRadius: 8 },
+  backButton: { minHeight: 36, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5, paddingRight: 10, borderRadius: 8 },
   backText: { color: COLORS.brown, fontSize: 14, fontWeight: "700" },
-  help: { color: COLORS.muted, marginTop: -8, lineHeight: 19 },
+  titleBlock: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 2 },
+  titleIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.cream },
+  titleCopy: { flex: 1, gap: 5 },
+  help: { color: COLORS.muted, lineHeight: 19 },
   error: { color: COLORS.error, fontSize: 13, fontWeight: "600" },
   confirmation: { color: COLORS.success, fontSize: 13, fontWeight: "700" },
 });

@@ -1,7 +1,7 @@
 import type { Position } from "../constants/positions";
 
 export type Role = "admin" | "finance" | "staff";
-export interface User { id: string; email: string; name: string; role: Role; employeeId?: string; password?: string; }
+export interface User { id: string; email: string; name: string; role: Role; employeeId?: string; password?: string; mustChangePassword?: boolean; }
 export interface Employee {
   id: string; 
   employeeNumber: string; 
@@ -10,6 +10,9 @@ export interface Employee {
   contactNumber: string;
   position: Position; employmentType: "Full-time" | "Part-time"; salaryType: "Hourly" | "Monthly";
   salaryAmount: number; dateHired: string; employmentStatus: "Active" | "Inactive";
+  updatedAt?: string;
+  authEmail?: string;
+  emailLowercase?: string;
 }
 export interface Attendance {
   id: string; employeeId: string; workDate: string; timeIn?: string; timeOut?: string;

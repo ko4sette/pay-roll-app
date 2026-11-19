@@ -4,6 +4,9 @@
     "slug": "cafe-payroll",
     "version": "1.0.0",
     "orientation": "portrait",
+    "android": {
+      "package": "com.paymeecafe.cafepayroll"
+    },
     "scheme": "cafe-payroll",
     "userInterfaceStyle": "light",
     "splash": {
@@ -15,6 +18,17 @@
     "plugins": [
       "expo-status-bar",
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "be713e22-2850-4a10-9738-2533ca11f25a"
+      }
+    },
+    "owner": "jvhonnes-team"
   }
 }

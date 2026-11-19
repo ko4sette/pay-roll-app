@@ -7,12 +7,13 @@ import { AppCard } from "../../components/common/AppCard";
 import { AppButton } from "../../components/common/AppButton";
 import { COLORS } from "../../constants/colors";
 import { localDateString, formatUsDate } from "../../utils/dateUtils";
-import { Attendance, PayrollRecord } from "../../types";
+import { Attendance, Employee, PayrollRecord } from "../../types";
 import { peso } from "../../utils/currencyUtils";
 import { PaydayCalendar } from "../../components/common/PaydayCalendar";
 
 interface AdminDashboardProps {
   attendance: Attendance[];
+  employees: Employee[];
   payroll: PayrollRecord[];
   onNavigate: (tab: any) => void;
   paydayDate?: string | null;
@@ -20,11 +21,20 @@ interface AdminDashboardProps {
   onToggleStore?: () => void;
 }
 
-export function AdminDashboard({ attendance, payroll, onNavigate, paydayDate, storeOpen = true, onToggleStore }: AdminDashboardProps) {
+export function AdminDashboard({ attendance, employees, payroll, onNavigate, paydayDate, storeOpen = true, onToggleStore }: AdminDashboardProps) {
   const today = localDateString();
   const needsReview = attendance.filter(item => item.workDate === today && (!item.timeOut || item.status === "Incomplete")).length;
   const pending = payroll.filter(item => item.status === "Pending");
   const pendingTotal = pending.reduce((sum, item) => sum + item.netPay, 0);
+  const readyToPrepare = new Set(attendance
+    .filter(item => item.timeIn && item.timeOut && employees.find(employee => employee.id === item.employeeId)?.salaryType === "Hourly")
+    .filter(item => !payroll.some(record => record.employeeId === item.employeeId && record.periodStart <= item.workDate && record.periodEnd >= item.workDate))
+    .map(item => `${item.employeeId}:${item.workDate}`)).size;
+  const payrollSummary = pending.length
+    ? `${pending.length} payment${pending.length === 1 ? "" : "s"} waiting for Finance`
+    : readyToPrepare
+      ? `${readyToPrepare} completed shift${readyToPrepare === 1 ? "" : "s"} ready to prepare`
+      : "No payroll actions waiting";
 
   return <ScreenContainer title="Good morning" subtitle={`${formatUsDate(today)}  ·  Café overview`}>
     {needsReview > 0 ? <AppCard style={styles.reviewCard}>
@@ -39,12 +49,13 @@ export function AdminDashboard({ attendance, payroll, onNavigate, paydayDate, st
       <View style={styles.payrollSummary}>
         <View style={styles.payrollIcon}><MaterialCommunityIcons name="cash-multiple" size={21} color={COLORS.brown} /></View>
         <View style={styles.payrollCopy}>
-          <Text style={styles.panelEyebrow}>PAYROLL</Text>
-          <Text style={styles.panelDescription}>{pending.length ? `${pending.length} payment${pending.length === 1 ? "" : "s"} waiting for Finance` : "No payments waiting for Finance"}</Text>
+          <Text style={styles.panelEyebrow}>PAYROLL STATUS</Text>
+          <Text style={styles.panelDescription}>{payrollSummary}</Text>
+          {pending.length > 0 && readyToPrepare > 0 ? <Text style={styles.panelSecondary}>{readyToPrepare} completed shift{readyToPrepare === 1 ? "" : "s"} also ready to prepare</Text> : null}
         </View>
         {pending.length > 0 ? <Text style={styles.panelTotal}>{peso(pendingTotal)}</Text> : null}
       </View>
-      <AppButton title={pending.length ? "Review payroll" : "Prepare payroll"} onPress={() => onNavigate("Payroll")} />
+      <AppButton title={pending.length ? "Review payroll" : readyToPrepare ? "Prepare payroll" : "Open payroll"} onPress={() => onNavigate("Payroll")} />
     </AppCard>
 
     <PaydayCalendar configuredPayday={paydayDate} />
@@ -79,6 +90,7 @@ const styles = StyleSheet.create({
   panelEyebrow: { color: COLORS.brown, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
   panelTotal: { color: COLORS.darkBrown, fontSize: 19, fontWeight: "900", textAlign: "right" },
   panelDescription: { color: COLORS.muted, fontSize: 13, lineHeight: 18 },
+  panelSecondary: { color: COLORS.brown, fontSize: 12, lineHeight: 16, marginTop: 2 },
   reviewCard: { backgroundColor: "#F0DFC5", borderColor: "#D6BD97", gap: 12 },
   reviewCopy: { flexDirection: "row", alignItems: "center", gap: 10 },
   reviewIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: "#E8D1AD", alignItems: "center", justifyContent: "center" },

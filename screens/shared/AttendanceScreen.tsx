@@ -12,7 +12,8 @@ import { EmptyState } from "../../components/common/EmptyState";
 import { localDateString } from "../../utils/dateUtils";
 
 const clock = () => new Date().toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: false });
-export function AttendanceScreen({ user, employees, attendance, setAttendance, storeOpen = true }: { user: User; employees: Employee[]; attendance: Attendance[]; setAttendance: React.Dispatch<React.SetStateAction<Attendance[]>>; storeOpen?: boolean }) {
+export function AttendanceScreen({ user, employees, attendance, setAttendance, onSaveAttendance, storeOpen = true }: { user: User; employees: Employee[]; attendance: Attendance[]; setAttendance: React.Dispatch<React.SetStateAction<Attendance[]>>; onSaveAttendance: (record: Attendance) => Promise<void>; storeOpen?: boolean }) {
+  const [saving, setSaving] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const confirmationScale = useRef(new Animated.Value(0.92)).current;
   const showConfirmation = (message: string) => {
@@ -26,16 +27,25 @@ export function AttendanceScreen({ user, employees, attendance, setAttendance, s
   const today = localDateString();
   const myToday = attendance.find(a => a.employeeId === user.employeeId && a.workDate === today);
   const canClock = storeOpen;
-  const doTimeIn = () => {
+  const doTimeIn = async () => {
     if (!storeOpen) { Alert.alert("Café is closed", "Employee clock-in is disabled while the café is closed."); return; }
     if (myToday?.timeIn) { Alert.alert("Already recorded", "You already have a time-in record for today."); return; }
     const timeIn = clock();
-    setAttendance(old => [...old, { id: `a${Date.now()}`, employeeId: user.employeeId || "", workDate: today, timeIn, regularHours: 0, overtimeHours: 0, status: "Incomplete", updatedAt: new Date().toISOString() }]);
-    showConfirmation(`You’re clocked in · ${timeIn}`);
+    const record: Attendance = { id: `a${Date.now()}`, employeeId: user.employeeId || "", workDate: today, timeIn, regularHours: 0, overtimeHours: 0, status: "Incomplete", updatedAt: new Date().toISOString() };
+    setSaving(true);
+    try {
+      await onSaveAttendance(record);
+      setAttendance(old => [...old, record]);
+      showConfirmation(`You’re clocked in · ${timeIn}`);
+    } catch {
+      Alert.alert("Could not record time in", "Check your internet connection and try again. Your time was not saved to the shared attendance records.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   
-  const doTimeOut = () => {
+  const doTimeOut = async () => {
     if (!storeOpen) { Alert.alert("Café is closed", "Employee clock-out is disabled while the café is closed."); return; }
     const current = attendance.find(a => a.employeeId === user.employeeId && a.workDate === today);
     if (!current?.timeIn) { Alert.alert("Time in required", "Record your time in before timing out."); return; }
@@ -43,11 +53,20 @@ export function AttendanceScreen({ user, employees, attendance, setAttendance, s
     const timeOut = clock();
     const [ih, im] = current.timeIn.split(":").map(Number); const [oh, om] = timeOut.split(":").map(Number);
     const hours = Math.max(0, Math.round(((oh * 60 + om) - (ih * 60 + im)) / 60 * 100) / 100);
-    setAttendance(old => old.map(a => a.id === current.id ? { ...a, timeOut, regularHours: Math.min(hours, 8), overtimeHours: Math.max(0, hours - 8), status: "Present", updatedAt: new Date().toISOString() } : a));
-    showConfirmation(`Shift complete · ${formatDuration(hours)}`);
+    const updatedRecord: Attendance = { ...current, timeOut, regularHours: Math.min(hours, 8), overtimeHours: Math.max(0, hours - 8), status: "Present", updatedAt: new Date().toISOString() };
+    setSaving(true);
+    try {
+      await onSaveAttendance(updatedRecord);
+      setAttendance(old => old.map(a => a.id === current.id ? updatedRecord : a));
+      showConfirmation(`Shift complete · ${formatDuration(hours)}`);
+    } catch {
+      Alert.alert("Could not record time out", "Check your internet connection and try again. Your time was not saved to the shared attendance records.");
+    } finally {
+      setSaving(false);
+    }
   };
   return <ScreenContainer title={isAdmin ? "Attendance" : "My Attendance"} subtitle={isAdmin ? "Review cafe team attendance." : "Record and review your work hours."}>
-    {!isAdmin && <AppCard style={styles.clockCard}><Text style={styles.heading}>Today's attendance</Text><Text style={styles.meta}>{myEmployee?.position || "Staff"} · {today}</Text>{confirmation ? <Animated.View style={[styles.confirmation, { transform: [{ scale: confirmationScale }] }]}><Text style={styles.confirmText}>{confirmation}</Text></Animated.View> : null}<View style={styles.buttons}><AppButton title={myToday?.timeIn ? "Clocked in" : "Clock in"} onPress={doTimeIn} disabled={Boolean(myToday?.timeIn) || !canClock} style={{ flex: 1 }} /><AppButton title={myToday?.timeOut ? "Clocked out" : "Clock out"} secondary onPress={doTimeOut} disabled={!myToday?.timeIn || Boolean(myToday?.timeOut) || !canClock} style={{ flex: 1 }} /></View><Text style={styles.note}>{storeOpen ? "You can clock in and out while the café is open." : "The café is closed. Clock in and out are unavailable; your attendance is unchanged."}</Text></AppCard>}
+    {!isAdmin && <AppCard style={styles.clockCard}><Text style={styles.heading}>Today's attendance</Text><Text style={styles.meta}>{myEmployee?.position || "Staff"} · {today}</Text>{confirmation ? <Animated.View style={[styles.confirmation, { transform: [{ scale: confirmationScale }] }]}><Text style={styles.confirmText}>{confirmation}</Text></Animated.View> : null}<View style={styles.buttons}><AppButton title={saving ? "Saving..." : myToday?.timeIn ? "Clocked in" : "Clock in"} onPress={doTimeIn} disabled={saving || Boolean(myToday?.timeIn) || !canClock} style={{ flex: 1 }} /><AppButton title={saving ? "Saving..." : myToday?.timeOut ? "Clocked out" : "Clock out"} secondary onPress={doTimeOut} disabled={saving || !myToday?.timeIn || Boolean(myToday?.timeOut) || !canClock} style={{ flex: 1 }} /></View><Text style={styles.note}>{storeOpen ? "You can clock in and out while the café is open." : "The café is closed. Clock in and out are unavailable; your attendance is unchanged."}</Text></AppCard>}
     {list.slice().reverse().map(a => {
       const employee = employees.find(e => e.id === a.employeeId);
       const shiftLength = a.timeOut ? formatDuration(a.regularHours + a.overtimeHours) : "In progress";

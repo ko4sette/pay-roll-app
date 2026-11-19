@@ -1,6 +1,7 @@
 import React from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { Stack } from "expo-router";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
 import { Inter_400Regular } from "@expo-google-fonts/inter/400Regular";
 import { Inter_500Medium } from "@expo-google-fonts/inter/500Medium";
@@ -27,11 +28,13 @@ export default function RootLayout() {
   }
 
   return (
+    <SafeAreaProvider>
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="home" />
       <Stack.Screen name="details/[id]" />
     </Stack>
+    </SafeAreaProvider>
   );
 }
 

@@ -44,27 +44,43 @@ export function FinanceDashboard({ payroll, onNavigate, paydayDate }: { payroll:
   </ScreenContainer>;
 }
 
-export function FinanceScreen({ employees, payroll, setPayroll }: {
-  employees: Employee[]; payroll: PayrollRecord[]; setPayroll: React.Dispatch<React.SetStateAction<PayrollRecord[]>>;
+export function FinanceScreen({ employees, payroll, onRecordPayment }: {
+  employees: Employee[]; payroll: PayrollRecord[]; onRecordPayment: (record: PayrollRecord) => Promise<void>;
 }) {
   const [selected, setSelected] = useState<PayrollRecord | null>(null);
   const [method, setMethod] = useState<PaymentMethod>("Bank transfer");
   const [successMessage, setSuccessMessage] = useState("");
+  const [paymentError, setPaymentError] = useState("");
+  const [savingPayment, setSavingPayment] = useState(false);
   const successScale = useRef(new Animated.Value(0.9)).current;
   const pending = useMemo(() => payroll.filter(record => record.status === "Pending").slice().reverse(), [payroll]);
   const total = pending.reduce((sum, record) => sum + record.netPay, 0);
   const selectedEmployee = selected ? employees.find(item => item.id === selected.employeeId) : undefined;
   const close = () => { setSelected(null); };
-  const recordPayment = () => {
-    if (!selected) return;
-    setPayroll(old => old.map(record => record.id === selected.id && record.status === "Pending"
-      ? { ...record, status: "Paid", paidAt: localDateString(), updatedAt: new Date().toISOString(), paymentMethod: method }
-      : record));
+  const recordPayment = async () => {
+    if (!selected || savingPayment) return;
+    setPaymentError("");
+    setSavingPayment(true);
+    const paidRecord: PayrollRecord = {
+      ...selected,
+      status: "Paid",
+      paidAt: localDateString(),
+      updatedAt: new Date().toISOString(),
+      paymentMethod: method,
+    };
+    try {
+      await onRecordPayment(paidRecord);
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : "Payment could not be saved. Check your connection and try again.");
+      setSavingPayment(false);
+      return;
+    }
     const employeeName = employees.find(item => item.id === selected.employeeId)?.fullName ?? "Employee";
     setSuccessMessage(`${employeeName} · ${peso(selected.netPay)} paid`);
     successScale.setValue(0.85);
     Animated.spring(successScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }).start();
     close();
+    setSavingPayment(false);
   };
   return <>
     <ScreenContainer title="Payments" subtitle="Pay records prepared by the administrator.">
@@ -86,7 +102,7 @@ export function FinanceScreen({ employees, payroll, setPayroll }: {
             </View>
             <Text style={styles.amount}>{peso(record.netPay)}</Text>
           </View>
-          <AppButton title="Record payment" onPress={() => { setSelected(record); setMethod("Bank transfer"); }} />
+          <AppButton title="Record payment" onPress={() => { setSelected(record); setMethod("Bank transfer"); setPaymentError(""); }} />
         </AppCard>;
       })}
       {!pending.length && <EmptyState title="You’re all caught up" message="New payments will appear here after payroll is prepared." />}
@@ -123,9 +139,10 @@ export function FinanceScreen({ employees, payroll, setPayroll }: {
             {isSelected ? <MaterialCommunityIcons name="check-circle" size={17} color={COLORS.brown} /> : null}
           </TouchableOpacity>;
         })}</View>
+        {paymentError ? <Text accessibilityRole="alert" style={{ color: COLORS.error, fontSize: 13, lineHeight: 18 }}>{paymentError}</Text> : null}
         <View style={styles.modalActions}>
           <AppButton title="Cancel" secondary onPress={close} style={styles.actionButton} />
-          <AppButton title="Confirm payment" onPress={recordPayment} style={styles.actionButton} />
+          <AppButton title={savingPayment ? "Saving..." : "Confirm payment"} disabled={savingPayment} onPress={recordPayment} style={styles.actionButton} />
         </View>
       </View></View>
     </Modal>

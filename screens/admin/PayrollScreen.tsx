@@ -18,7 +18,7 @@ interface PayrollScreenProps {
   employees: Employee[];
   attendance: Attendance[];
   payroll: PayrollRecord[];
-  setPayroll: React.Dispatch<React.SetStateAction<PayrollRecord[]>>;
+  onCreatePayroll: (records: PayrollRecord[]) => Promise<void>;
   cashouts: CashoutRequest[];
   setCashouts: React.Dispatch<React.SetStateAction<CashoutRequest[]>>;
 }
@@ -27,11 +27,12 @@ export function PayrollScreen({
   employees,
   attendance,
   payroll,
-  setPayroll,
+  onCreatePayroll,
   cashouts,
   setCashouts,
 }: PayrollScreenProps) {
   const [modalDate, setModalDate] = useState<string | null>(null);
+  const [generatingDate, setGeneratingDate] = useState<string | null>(null);
   const payrollDates = Array.from(new Set([
     ...attendance.map(record => record.workDate),
     ...payroll.map(record => record.periodEnd),
@@ -53,7 +54,8 @@ export function PayrollScreen({
     && record.periodEnd >= date,
   );
 
-  const generate = (selectedDate: string) => {
+  const generate = async (selectedDate: string) => {
+    if (generatingDate) return;
     const employeeAttendance = getEmployeeRows(selectedDate);
     const hourlyRows = employeeAttendance.filter(({ employee }) => employee.salaryType === "Hourly");
     const monthlyCount = employeeAttendance.length - hourlyRows.length;
@@ -81,18 +83,18 @@ export function PayrollScreen({
       return;
     }
 
-    setPayroll(old => [
-      ...old,
-      ...newRecords.filter(candidate => !old.some(record =>
-        record.employeeId === candidate.employeeId
-        && record.periodStart <= selectedDate
-        && record.periodEnd >= selectedDate,
-      )),
-    ]);
-    const monthlyNote = monthlyCount
-      ? ` ${monthlyCount} monthly-salaried employee(s) were skipped because no daily pay policy is configured.`
-      : "";
-    Alert.alert("Payroll generated", `${newRecords.length} payroll record(s) generated for ${formatUsDate(selectedDate)}.${monthlyNote}`);
+    setGeneratingDate(selectedDate);
+    try {
+      await onCreatePayroll(newRecords);
+      const monthlyNote = monthlyCount
+        ? ` ${monthlyCount} monthly-salaried employee(s) were skipped because no daily pay policy is configured.`
+        : "";
+      Alert.alert("Payroll generated", `${newRecords.length} payroll record(s) generated for ${formatUsDate(selectedDate)}.${monthlyNote}`);
+    } catch (error) {
+      Alert.alert("Could not prepare payroll", error instanceof Error ? error.message : "Check your connection and try again.");
+    } finally {
+      setGeneratingDate(null);
+    }
   };
 
   const processCashout = (request: CashoutRequest, status: "Approved" | "Rejected") => {
@@ -150,7 +152,7 @@ export function PayrollScreen({
             <Text style={[styles.financeStatusText, { color: allPaid ? COLORS.success : COLORS.warning }]}>{financeStatus}</Text>
           </View> : null}
           <View style={styles.dateActions}>
-            {(!allPrepared || hourlyRows.length === 0) ? <AppButton title="Prepare payroll" onPress={() => generate(date)} style={styles.prepareButton} /> : null}
+            {(!allPrepared || hourlyRows.length === 0) ? <AppButton title={generatingDate === date ? "Preparing..." : "Prepare payroll"} disabled={generatingDate !== null} onPress={() => generate(date)} style={styles.prepareButton} /> : null}
             <AppButton title="View team" secondary onPress={() => setModalDate(date)} style={styles.teamButton} />
           </View>
         </AppCard>;
@@ -175,19 +177,30 @@ export function PayrollScreen({
               {selectedAttendance.map(({ employee, records }) => {
                 const record = modalDate ? getPayrollRecord(employee.id, modalDate) : undefined;
                 const attendanceStatus = Array.from(new Set(records.map(item => item.status))).join(", ");
-                const hours = records.reduce((sum, item) => sum + item.regularHours + item.overtimeHours, 0);
-                const amount = record ? peso(record.netPay) : employee.salaryType === "Monthly" ? "Not available" : "Not calculated";
+                const payableShifts = records.filter(item => item.timeIn && item.timeOut && item.regularHours > 0);
+                const regularHours = payableShifts.reduce((sum, item) => sum + item.regularHours, 0);
+                const overtimeHours = payableShifts.reduce((sum, item) => sum + item.overtimeHours, 0);
+                const hours = regularHours + overtimeHours;
+                const estimate = calculatePay(employee, records);
+                const overtimePay = record?.overtimePay ?? estimate.overtimePay;
+                const amount = record ? peso(record.netPay) : employee.salaryType === "Monthly" ? "Not available" : peso(estimate.netPay);
                 const statusLabel = record ? record.status === "Paid" ? "Paid" : "Ready for Finance" : "Not prepared";
                 return <AppCard key={employee.id} style={styles.employeePayrollCard}>
                   <View style={styles.employeePayrollHeader}><View style={{ flex: 1 }}><Text style={styles.employeePayrollName}>{employee.fullName}</Text><Text style={styles.meta}>{employee.position}</Text></View><View style={[styles.statePill, record?.status === "Paid" ? styles.statePaid : record ? styles.stateReady : styles.stateIdle]}><Text style={styles.stateText}>{statusLabel}</Text></View></View>
                   <View style={styles.summaryLine}><Text style={styles.meta}>Attendance</Text><Text style={styles.summaryValue}>{attendanceStatus}</Text></View>
-                  <View style={styles.summaryLine}><Text style={styles.meta}>Hours worked</Text><Text style={styles.summaryValue}>{formatDuration(hours)}</Text></View>
-                  <View style={styles.amountLine}><Text style={styles.employeePayrollName}>Take-home pay</Text><Text style={styles.employeeAmount}>{amount}</Text></View>
+                  <View style={styles.breakdown}>
+                    <Text style={styles.breakdownTitle}>Pay breakdown</Text>
+                    <View style={styles.summaryLine}><Text style={styles.meta}>Regular hours</Text><Text style={styles.summaryValue}>{formatDuration(regularHours)}</Text></View>
+                    <View style={styles.summaryLine}><Text style={styles.meta}>{employee.salaryType === "Hourly" ? "Hourly rate" : "Monthly rate"}</Text><Text style={styles.summaryValue}>{peso(employee.salaryAmount)}{employee.salaryType === "Hourly" ? "/hour" : "/month"}</Text></View>
+                    {overtimePay > 0 ? <View style={styles.summaryLine}><Text style={styles.meta}>Overtime · {formatDuration(overtimeHours)}</Text><Text style={styles.summaryValue}>{peso(overtimePay)}</Text></View> : null}
+                    <View style={styles.summaryLine}><Text style={styles.meta}>Total hours</Text><Text style={styles.summaryValue}>{formatDuration(hours)}</Text></View>
+                  </View>
+                  <View style={styles.amountLine}><View><Text style={styles.employeePayrollName}>Take-home pay</Text><Text style={styles.meta}>{record ? "Final payroll amount" : "Estimated after preparation"}</Text></View><Text style={styles.employeeAmount}>{amount}</Text></View>
                   {record?.updatedAt || record?.preparedAt ? <Text style={styles.updatedCell}>Updated {formatTimeUpdated(record.updatedAt ?? record.preparedAt)}</Text> : null}
                 </AppCard>;
               })}
             </ScrollView>}
-          <Text style={styles.modalNote}>Monthly salary is not calculated by this demo payroll flow.</Text>
+          <Text style={styles.modalNote}>Pay = hours worked × hourly rate + overtime pay</Text>
         </View>
       </View>
     </Modal>
@@ -216,12 +229,14 @@ const styles = StyleSheet.create({
   closeButton: { paddingVertical: 9, paddingHorizontal: 12 },
   employeeList: { flexGrow: 0, maxHeight: 490 },
   employeeListContent: { gap: 10, paddingBottom: 4 },
-  employeePayrollCard: { gap: 8, backgroundColor: "#EDE1D0" },
+  employeePayrollCard: { gap: 10, backgroundColor: "#EDE1D0" },
   employeePayrollHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
   employeePayrollName: { color: COLORS.darkBrown, fontSize: 16, fontWeight: "800" },
   summaryLine: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
   summaryValue: { color: COLORS.darkBrown, fontSize: 14, fontWeight: "600", flexShrink: 1, textAlign: "right" },
-  amountLine: { borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 9, marginTop: 2, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  breakdown: { gap: 8, padding: 11, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.42)" },
+  breakdownTitle: { color: COLORS.darkBrown, fontSize: 12, fontWeight: "800", marginBottom: 1 },
+  amountLine: { borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10, marginTop: 1, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   employeeAmount: { color: COLORS.darkBrown, fontSize: 18, fontWeight: "900" },
   statePill: { borderRadius: 13, paddingHorizontal: 9, paddingVertical: 6 },
   statePaid: { backgroundColor: "#E5F0E0" }, stateReady: { backgroundColor: "#F9EBD2" }, stateIdle: { backgroundColor: COLORS.cream },

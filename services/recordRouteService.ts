@@ -1,6 +1,6 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { auth } from "./firebase";
 import { Attendance, Employee, PayrollRecord, User } from "../types";
-import { employeeNeedsPasswordChange } from "./authService";
+import { loadFirebaseAppUser } from "./firebaseAuthService";
 import { loadData } from "./storageService";
 import { formatDuration, formatTimeUpdated, formatUsDate } from "../utils/dateUtils";
 import { peso } from "../utils/currencyUtils";
@@ -30,31 +30,18 @@ function canViewEmployee(user: User, employeeId: string): boolean {
 }
 
 export async function loadAuthorizedUser(): Promise<User | null> {
-  const rawUser = await AsyncStorage.getItem("cafe_current_user");
-  if (!rawUser) return null;
-
-  let parsedUser: User;
-  try {
-    parsedUser = JSON.parse(rawUser) as User;
-  } catch {
-    await AsyncStorage.removeItem("cafe_current_user");
-    return null;
-  }
-
+  const firebaseUser = auth.currentUser;
+  if (!firebaseUser) return null;
+  const parsedUser = await loadFirebaseAppUser(firebaseUser.uid);
+  if (!parsedUser || parsedUser.mustChangePassword) return null;
   if (parsedUser.role === "admin" || parsedUser.role === "finance") return parsedUser;
-  if (parsedUser.role !== "staff" || !parsedUser.employeeId) {
-    await AsyncStorage.removeItem("cafe_current_user");
-    return null;
-  }
+  if (parsedUser.role !== "staff" || !parsedUser.employeeId) return null;
 
   const data = await loadData();
   const employeeIsActive = data.employees.some(
     employee => employee.id === parsedUser.employeeId && employee.employmentStatus === "Active",
   );
-  if (!employeeIsActive || await employeeNeedsPasswordChange(parsedUser.employeeId)) {
-    await AsyncStorage.removeItem("cafe_current_user");
-    return null;
-  }
+  if (!employeeIsActive) return null;
   return parsedUser;
 }
 
