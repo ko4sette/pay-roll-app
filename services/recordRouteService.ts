@@ -4,6 +4,7 @@ import { employeeNeedsPasswordChange } from "./authService";
 import { loadData } from "./storageService";
 import { formatDuration, formatTimeUpdated, formatUsDate } from "../utils/dateUtils";
 import { peso } from "../utils/currencyUtils";
+import { getAttendanceWorkedMinutes, uniqueAttendanceByEmployeeDay } from "../utils/attendanceUtils";
 
 export interface RecordListItem {
   id: string;
@@ -129,10 +130,16 @@ export function findRecordDetail(data: PayrollData, user: User, routeId: string)
     const record = data.attendance.find(item => item.id === recordId && canViewEmployee(user, item.employeeId));
     if (!record) return null;
     const employeeName = data.employees.find(employee => employee.id === record.employeeId)?.fullName ?? "Employee";
+    const workedMinutes = getAttendanceWorkedMinutes(record);
     return {
       title: `${employeeName} · ${formatUsDate(record.workDate)}`,
       subtitle: `Attendance · ${record.status}`,
-      summary: { label: "Shift length", value: record.timeOut ? formatDuration(record.regularHours + record.overtimeHours) : "In progress" },
+      summary: {
+        label: "Shift length",
+        value: workedMinutes !== null
+          ? formatDuration(workedMinutes / 60)
+          : "In progress",
+      },
       sections: [
         { title: "Shift details", fields: [
           { label: "Employee ID", value: record.employeeId },
@@ -150,13 +157,15 @@ export function findRecordDetail(data: PayrollData, user: User, routeId: string)
     const record = data.payroll.find(item => item.id === recordId && canViewEmployee(user, item.employeeId));
     if (!record) return null;
     const employeeName = data.employees.find(employee => employee.id === record.employeeId)?.fullName ?? "Employee";
-    const hoursWorked = data.attendance
+    const hoursWorked = record.workedMinutes !== undefined
+      ? record.workedMinutes / 60
+      : uniqueAttendanceByEmployeeDay(data.attendance
       .filter(item => item.employeeId === record.employeeId
         && item.workDate >= record.periodStart
         && item.workDate <= record.periodEnd
         && item.timeIn
-        && item.timeOut)
-      .reduce((total, item) => total + item.regularHours + item.overtimeHours, 0);
+        && item.timeOut))
+      .reduce((total, item) => total + (getAttendanceWorkedMinutes(item) ?? 0) / 60, 0);
     const period = `${formatUsDate(record.periodStart)}${record.periodEnd !== record.periodStart ? ` – ${formatUsDate(record.periodEnd)}` : ""}`;
     return {
       title: `${employeeName} · ${period}`,
@@ -168,6 +177,7 @@ export function findRecordDetail(data: PayrollData, user: User, routeId: string)
           { label: "Hours worked", value: formatDuration(hoursWorked) },
         ] },
         { title: "Earnings", fields: [
+          ...(record.hourlyRate !== undefined ? [{ label: "Hourly rate", value: `${peso(record.hourlyRate)} / hour` }] : []),
           { label: "Regular pay", value: peso(record.basicPay) },
           ...(record.overtimePay > 0 ? [{ label: "Overtime pay", value: peso(record.overtimePay) }] : []),
           { label: "Pay earned", value: peso(record.grossPay) },

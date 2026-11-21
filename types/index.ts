@@ -18,6 +18,7 @@ export interface Attendance {
 export interface PayrollRecord {
   id: string; employeeId: string; periodStart: string; periodEnd: string; basicPay: number;
   overtimePay: number; allowances: number; grossPay: number; deductions: number; netPay: number;
+  hourlyRate?: number; workedMinutes?: number;
   deductionItems?: { name: string; amount: number }[];
   status: "Pending" | "Paid"; paidAt?: string; preparedAt?: string; updatedAt?: string; paymentMethod?: "Cash" | "Bank transfer" | "E-wallet"; paymentReference?: string;
 }

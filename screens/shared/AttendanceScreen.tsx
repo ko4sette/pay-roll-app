@@ -10,8 +10,12 @@ import { COLORS } from "../../constants/colors";
 import { formatDuration, formatTimeUpdated, formatUsDate } from "../../utils/dateUtils";
 import { EmptyState } from "../../components/common/EmptyState";
 import { localDateString } from "../../utils/dateUtils";
+import { getAttendanceWorkedMinutes } from "../../utils/attendanceUtils";
 
-const clock = () => new Date().toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: false });
+const clock = () => {
+  const now = new Date();
+  return [now.getHours(), now.getMinutes(), now.getSeconds()].map(value => String(value).padStart(2, "0")).join(":");
+};
 export function AttendanceScreen({ user, employees, attendance, setAttendance, storeOpen = true }: { user: User; employees: Employee[]; attendance: Attendance[]; setAttendance: React.Dispatch<React.SetStateAction<Attendance[]>>; storeOpen?: boolean }) {
   const [confirmation, setConfirmation] = useState("");
   const confirmationScale = useRef(new Animated.Value(0.92)).current;
@@ -41,8 +45,12 @@ export function AttendanceScreen({ user, employees, attendance, setAttendance, s
     if (!current?.timeIn) { Alert.alert("Time in required", "Record your time in before timing out."); return; }
     if (current.timeOut) { Alert.alert("Already recorded", "Time out has already been recorded."); return; }
     const timeOut = clock();
-    const [ih, im] = current.timeIn.split(":").map(Number); const [oh, om] = timeOut.split(":").map(Number);
-    const hours = Math.max(0, Math.round(((oh * 60 + om) - (ih * 60 + im)) / 60 * 100) / 100);
+    const workedMinutes = getAttendanceWorkedMinutes({ ...current, timeOut });
+    if (workedMinutes === null) {
+      Alert.alert("Unable to calculate shift", "The recorded clock-in or clock-out time is invalid.");
+      return;
+    }
+    const hours = workedMinutes / 60;
     setAttendance(old => old.map(a => a.id === current.id ? { ...a, timeOut, regularHours: Math.min(hours, 8), overtimeHours: Math.max(0, hours - 8), status: "Present", updatedAt: new Date().toISOString() } : a));
     showConfirmation(`Shift complete · ${formatDuration(hours)}`);
   };
@@ -50,7 +58,8 @@ export function AttendanceScreen({ user, employees, attendance, setAttendance, s
     {!isAdmin && <AppCard style={styles.clockCard}><Text style={styles.heading}>Today's attendance</Text><Text style={styles.meta}>{myEmployee?.position || "Staff"} · {today}</Text>{confirmation ? <Animated.View style={[styles.confirmation, { transform: [{ scale: confirmationScale }] }]}><Text style={styles.confirmText}>{confirmation}</Text></Animated.View> : null}<View style={styles.buttons}><AppButton title={myToday?.timeIn ? "Clocked in" : "Clock in"} onPress={doTimeIn} disabled={Boolean(myToday?.timeIn) || !canClock} style={{ flex: 1 }} /><AppButton title={myToday?.timeOut ? "Clocked out" : "Clock out"} secondary onPress={doTimeOut} disabled={!myToday?.timeIn || Boolean(myToday?.timeOut) || !canClock} style={{ flex: 1 }} /></View><Text style={styles.note}>{storeOpen ? "You can clock in and out while the café is open." : "The café is closed. Clock in and out are unavailable; your attendance is unchanged."}</Text></AppCard>}
     {list.slice().reverse().map(a => {
       const employee = employees.find(e => e.id === a.employeeId);
-      const shiftLength = a.timeOut ? formatDuration(a.regularHours + a.overtimeHours) : "In progress";
+      const workedMinutes = getAttendanceWorkedMinutes(a);
+      const shiftLength = workedMinutes !== null ? formatDuration(workedMinutes / 60) : "In progress";
       return <AppCard key={a.id} style={styles.recordCard}><View style={styles.row}><View style={{ flex: 1 }}><Text style={styles.heading}>{isAdmin ? employee?.fullName || "Unknown employee" : formatUsDate(a.workDate)}</Text><Text style={styles.meta}>{isAdmin ? `${formatUsDate(a.workDate)} · ${employee?.position || ""}` : `Time in ${a.timeIn || "--"} · Time out ${a.timeOut || "--"}`}</Text>{isAdmin ? <><Text style={styles.meta}>In: {a.timeIn || "--"} · Out: {a.timeOut || "--"}</Text><Text style={styles.meta}>Shift length: {shiftLength}</Text></> : <Text style={styles.meta}>Shift length: {shiftLength}</Text>}<Text style={styles.updated}>Updated {a.updatedAt ? formatTimeUpdated(a.updatedAt) : formatUsDate(a.workDate)}</Text></View><StatusBadge status={a.status} /></View></AppCard>;
     })}
     {list.length === 0 && <EmptyState title="No shifts to show yet" message={isAdmin ? "Employee attendance will appear here after the team starts recording shifts." : "Your clock-in and clock-out history will appear here."} />}

@@ -13,6 +13,7 @@ import { formatDuration, formatUsDate, localDateString } from "../../utils/dateU
 import { getCashoutSummary } from "../../utils/cashoutUtils";
 import { EmptyState } from "../../components/common/EmptyState";
 import { formatTimeUpdated } from "../../utils/dateUtils";
+import { uniqueAttendanceByEmployeeDay } from "../../utils/attendanceUtils";
 
 interface PayrollScreenProps {
   employees: Employee[];
@@ -40,7 +41,7 @@ export function PayrollScreen({
     .sort((left, right) => right.localeCompare(left));
 
   const getEmployeeRows = (date: string) => {
-    const dateAttendance = attendance.filter(record => record.workDate === date);
+    const dateAttendance = uniqueAttendanceByEmployeeDay(attendance.filter(record => record.workDate === date));
     return employees.flatMap(employee => {
       const records = dateAttendance.filter(record => record.employeeId === employee.id);
       return records.length ? [{ employee, records }] : [];
@@ -67,11 +68,12 @@ export function PayrollScreen({
           periodStart: selectedDate,
           periodEnd: selectedDate,
           ...calculation,
-          status: "Pending",
+          status: "Pending" as const,
           preparedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
-      });
+      })
+      .filter(record => record.workedMinutes > 0);
 
     if (!newRecords.length) {
       const reason = monthlyCount && !hourlyRows.length
@@ -175,12 +177,21 @@ export function PayrollScreen({
               {selectedAttendance.map(({ employee, records }) => {
                 const record = modalDate ? getPayrollRecord(employee.id, modalDate) : undefined;
                 const attendanceStatus = Array.from(new Set(records.map(item => item.status))).join(", ");
-                const hours = records.reduce((sum, item) => sum + item.regularHours + item.overtimeHours, 0);
-                const amount = record ? peso(record.netPay) : employee.salaryType === "Monthly" ? "Not available" : "Not calculated";
+                const calculation = calculatePay(employee, records);
+                const workedMinutes = record?.workedMinutes ?? calculation.workedMinutes;
+                const hours = workedMinutes / 60;
+                const amount = record
+                  ? peso(record.netPay)
+                  : employee.salaryType === "Monthly"
+                    ? "Not available"
+                    : calculation.workedMinutes > 0
+                      ? peso(calculation.netPay)
+                      : "Not calculated";
                 const statusLabel = record ? record.status === "Paid" ? "Paid" : "Ready for Finance" : "Not prepared";
                 return <AppCard key={employee.id} style={styles.employeePayrollCard}>
                   <View style={styles.employeePayrollHeader}><View style={{ flex: 1 }}><Text style={styles.employeePayrollName}>{employee.fullName}</Text><Text style={styles.meta}>{employee.position}</Text></View><View style={[styles.statePill, record?.status === "Paid" ? styles.statePaid : record ? styles.stateReady : styles.stateIdle]}><Text style={styles.stateText}>{statusLabel}</Text></View></View>
                   <View style={styles.summaryLine}><Text style={styles.meta}>Attendance</Text><Text style={styles.summaryValue}>{attendanceStatus}</Text></View>
+                  {employee.salaryType === "Hourly" ? <View style={styles.summaryLine}><Text style={styles.meta}>Hourly rate</Text><Text style={styles.summaryValue}>{record ? record.hourlyRate !== undefined ? `${peso(record.hourlyRate)} / hr` : "Not recorded" : `${peso(employee.salaryAmount)} / hr`}</Text></View> : null}
                   <View style={styles.summaryLine}><Text style={styles.meta}>Hours worked</Text><Text style={styles.summaryValue}>{formatDuration(hours)}</Text></View>
                   <View style={styles.amountLine}><Text style={styles.employeePayrollName}>Take-home pay</Text><Text style={styles.employeeAmount}>{amount}</Text></View>
                   {record?.updatedAt || record?.preparedAt ? <Text style={styles.updatedCell}>Updated {formatTimeUpdated(record.updatedAt ?? record.preparedAt)}</Text> : null}

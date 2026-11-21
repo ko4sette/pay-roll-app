@@ -39,6 +39,9 @@ export function EmployeesScreen({
   const [phoneNumber, setPhoneNumber] = useState("");
   const [phoneEditEmployeeId, setPhoneEditEmployeeId] = useState<string | null>(null);
   const [positionPickerVisible, setPositionPickerVisible] = useState(false);
+  const [payEditorVisible, setPayEditorVisible] = useState(false);
+  const [editPosition, setEditPosition] = useState<Position>("Barista");
+  const [editHourlyRate, setEditHourlyRate] = useState("");
   const [creating, setCreating] = useState(false);
   const hourlyRate = POSITION_RATES[position];
   const selectedEmployee = employees.find(employee => employee.id === selectedEmployeeId);
@@ -114,6 +117,25 @@ export function EmployeesScreen({
       ? { ...employee, contactNumber: phoneNumber.trim() }
       : employee));
     setPhoneEditEmployeeId(null);
+  };
+
+  const openPayEditor = (employee: Employee) => {
+    setEditPosition(employee.position);
+    setEditHourlyRate(String(employee.salaryAmount));
+    setPayEditorVisible(true);
+  };
+
+  const savePayDetails = () => {
+    if (!selectedEmployee) return;
+    const hourlyRate = Number(editHourlyRate);
+    if (!editHourlyRate.trim() || !Number.isFinite(hourlyRate) || hourlyRate < 0) {
+      Alert.alert("Check hourly rate", "Enter a valid hourly rate of zero or more.");
+      return;
+    }
+    setEmployees(old => old.map(employee => employee.id === selectedEmployee.id
+      ? { ...employee, position: editPosition, salaryAmount: hourlyRate }
+      : employee));
+    setPayEditorVisible(false);
   };
 
   const resetPassword = async (employee: Employee) => {
@@ -223,6 +245,9 @@ export function EmployeesScreen({
                 label="Salary"
                 value={`${peso(selectedEmployee.salaryAmount)} / ${selectedEmployee.salaryType === "Hourly" ? "hour" : "month"}`}
               />
+              {selectedEmployee.salaryType === "Hourly"
+                ? <AppButton title="Update position and hourly rate" secondary onPress={() => openPayEditor(selectedEmployee)} />
+                : null}
               <Detail label="Date Hired" value={formatUsDate(selectedEmployee.dateHired)} />
               <Detail label="Employment Status" value={selectedEmployee.employmentStatus} />
             </ScrollView>
@@ -275,6 +300,33 @@ export function EmployeesScreen({
         </View>
       </View>
     </Modal>
+
+    <Modal visible={payEditorVisible} transparent animationType="fade" onRequestClose={() => setPayEditorVisible(false)}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.positionModal}>
+          <Text style={styles.modalTitle}>Update position and hourly rate</Text>
+          {POSITIONS.map(option => <TouchableOpacity
+            key={option}
+            accessibilityRole="button"
+            accessibilityState={{ selected: editPosition === option }}
+            onPress={() => { setEditPosition(option); setEditHourlyRate(String(POSITION_RATES[option])); }}
+            style={[styles.option, editPosition === option && styles.selectedOption]}
+          >
+            <Text style={styles.optionText}>{option}</Text>
+            <Text style={styles.optionRate}>{peso(POSITION_RATES[option])} / hour</Text>
+          </TouchableOpacity>)}
+          <Field
+            label="HOURLY RATE (₱)"
+            value={editHourlyRate}
+            onChangeText={setEditHourlyRate}
+            placeholder="Hourly rate"
+            keyboardType="decimal-pad"
+          />
+          <AppButton title="Save changes" onPress={savePayDetails} />
+          <AppButton title="Cancel" secondary onPress={() => setPayEditorVisible(false)} />
+        </View>
+      </View>
+    </Modal>
   </ScreenContainer>;
 }
 
@@ -306,6 +358,7 @@ const styles = StyleSheet.create({
   optionText: { color: COLORS.darkBrown, fontWeight: "700" },
   optionDescription: { color: COLORS.muted, fontSize: 11, marginTop: 3 },
   optionRate: { color: COLORS.brown, fontSize: 12, fontWeight: "700" },
+  selectedOption: { borderWidth: 1, borderColor: COLORS.brown },
   employeeRow: { gap: 12, backgroundColor: "#EDE1D0" },
   employeeHeading: { flexDirection: "row", alignItems: "center", gap: 11 },
   name: { color: COLORS.darkBrown, fontSize: 16, fontWeight: "800" },

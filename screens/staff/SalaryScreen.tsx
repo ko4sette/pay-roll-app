@@ -9,19 +9,23 @@ import { COLORS } from "../../constants/colors";
 import { peso } from "../../utils/currencyUtils";
 import { formatDuration, formatUsDate } from "../../utils/dateUtils";
 import { EmptyState } from "../../components/common/EmptyState";
+import { getAttendanceWorkedMinutes, uniqueAttendanceByEmployeeDay } from "../../utils/attendanceUtils";
 
 interface SalaryScreenProps { user: User; employee?: Employee; attendance: Attendance[]; payroll: PayrollRecord[]; }
 
 export function SalaryScreen({ user, employee, attendance, payroll }: SalaryScreenProps) {
   const employeeId = user.employeeId ?? "";
   const records = payroll.filter(record => record.employeeId === employeeId).slice().sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
-  const getHoursWorked = (record: PayrollRecord) => attendance
-    .filter(item => item.employeeId === employeeId && item.workDate >= record.periodStart && item.workDate <= record.periodEnd && item.timeIn && item.timeOut)
-    .reduce((total, item) => total + item.regularHours + item.overtimeHours, 0);
+  const getHoursWorked = (record: PayrollRecord) => record.workedMinutes !== undefined
+    ? record.workedMinutes / 60
+    : uniqueAttendanceByEmployeeDay(attendance
+      .filter(item => item.employeeId === employeeId && item.workDate >= record.periodStart && item.workDate <= record.periodEnd && item.timeIn && item.timeOut))
+      .reduce((total, item) => total + (getAttendanceWorkedMinutes(item) ?? 0) / 60, 0);
   return <ScreenContainer title="My Salary" subtitle="Your payslips and take-home pay.">
     {records.map(record => <AppCard key={record.id} style={styles.slip}>
       <View style={styles.slipHeading}><View style={{ flex: 1 }}><Text style={styles.slipEyebrow}>PAYSLIP · {employee?.fullName ?? user.name}</Text><Text style={styles.period}>{formatUsDate(record.periodStart)}{record.periodEnd !== record.periodStart ? ` – ${formatUsDate(record.periodEnd)}` : ""}</Text></View><StatusBadge status={record.status === "Paid" ? "Released" : "Pending"} /></View>
       <Line label="Hours worked" value={formatDuration(getHoursWorked(record))} />
+      {record.hourlyRate !== undefined ? <Line label="Hourly rate" value={`${peso(record.hourlyRate)} / hour`} /> : null}
       <Text style={styles.sectionTitle}>Pay</Text>
       <Line label="Regular pay" value={peso(record.basicPay)} />
       {record.overtimePay > 0 ? <Line label="Overtime pay" value={peso(record.overtimePay)} /> : null}
